@@ -1,0 +1,19 @@
+[build]
+command = "npm run build"
+publish = "dist"
+
+[dev]
+command = "npm run dev -- --strictPort"
+targetPort = 5173
+port = 8888
+publish = "dist"
+framework = "#custom"
+
+[functions]
+directory = "netlify/functions"
+included_files = ["data/products.json"]
+
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200
