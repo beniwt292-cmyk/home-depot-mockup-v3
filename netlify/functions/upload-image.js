@@ -1,80 +1,108 @@
-const { getStore } = require("@netlify/blobs");
+import * as netlifyBlobs from "@netlify/blobs";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
-const STORE_NAME = "product-images";
+const STORE_NAME = "hd-images";
+const LOCAL_UPLOAD_DIR = path.join(process.cwd(), ".netlify", "local-image-uploads");
+const MAX_UPLOAD_BYTES = 6 * 1024 * 1024;
 
-function json(statusCode, body) {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-store"
-    },
-    body: JSON.stringify(body)
-  };
+const JSON_HEADERS = {
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS"
+};
+
+function json(statusCode, payload) {
+  return { statusCode, headers: JSON_HEADERS, body: JSON.stringify(payload) };
 }
 
-function safePart(value, fallback = "image") {
+function sanitizePart(value, fallback = "image") {
   return String(value || fallback)
     .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "") || fallback;
+    .replace(/[^a-z0-9._-]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 90) || fallback;
 }
 
-function parseDataUrl(dataUrl) {
-  const match = String(dataUrl || "").match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) throw new Error("Expected a base64 data URL");
-  const contentType = match[1] || "image/jpeg";
-  const buffer = Buffer.from(match[2], "base64");
-  if (!buffer.length) throw new Error("Image payload is empty");
-  return { contentType, buffer };
-}
-
-function extensionFromType(contentType) {
-  if (contentType === "image/png") return "png";
-  if (contentType === "image/webp") return "webp";
-  if (contentType === "image/gif") return "gif";
+function getExtension(contentType, fileName) {
+  const fromName = String(fileName || "").toLowerCase().match(/\.(png|jpe?g|webp|gif)$/)?.[1];
+  if (fromName) return fromName === "jpeg" ? "jpg" : fromName;
+  if (contentType.includes("png")) return "png";
+  if (contentType.includes("webp")) return "webp";
+  if (contentType.includes("gif")) return "gif";
   return "jpg";
 }
 
-exports.handler = async (event) => {
-  if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Allow-Methods": "POST, OPTIONS" } };
-  }
+function parseDataUrl(dataUrl) {
+  const match = String(dataUrl || "").match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!match) throw new Error("Expected a base64 image data URL.");
+  const contentType = match[1].toLowerCase();
+  const buffer = Buffer.from(match[2], "base64");
+  if (!buffer.length) throw new Error("Uploaded image was empty.");
+  if (buffer.length > MAX_UPLOAD_BYTES) throw new Error("Uploaded image is too large after resizing. Try a smaller image.");
+  return { contentType, buffer };
+}
 
-  if (event.httpMethod !== "POST") {
-    return json(405, { error: "Method not allowed" });
+function getStoreSafe(event) {
+  try {
+    if (typeof netlifyBlobs.connectLambda === "function") netlifyBlobs.connectLambda(event);
+    return netlifyBlobs.getStore(STORE_NAME);
+  } catch (error) {
+    if (error?.name !== "MissingBlobsEnvironmentError") throw error;
+    return null;
   }
+}
+
+function localPathForKey(key) {
+  const safeParts = String(key || "").split("/").map((part) => sanitizePart(part, "file"));
+  return path.join(LOCAL_UPLOAD_DIR, ...safeParts);
+}
+
+async function saveLocalImage(key, buffer, metadata) {
+  const filePath = localPathForKey(key);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, buffer);
+  await fs.writeFile(`${filePath}.json`, JSON.stringify(metadata, null, 2));
+}
+
+export const handler = async (event) => {
+  if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers: JSON_HEADERS, body: "" };
+  if (event.httpMethod !== "POST") return json(405, { error: "Use POST to upload an image." });
 
   try {
-    const body = JSON.parse(event.body || "{}");
-    const { contentType, buffer } = parseDataUrl(body.dataUrl);
+    const payload = JSON.parse(event.body || "{}");
+    const { contentType, buffer } = parseDataUrl(payload.dataUrl);
+    const productId = sanitizePart(payload.productId || "shared", "shared");
+    const field = sanitizePart(payload.field || "image", "image");
+    const originalName = sanitizePart(payload.fileName || `${field}.jpg`, `${field}.jpg`);
+    const extension = getExtension(contentType, originalName);
+    const key = `uploads/${productId}/${Date.now()}-${field}-${originalName.replace(/\.[^.]+$/, "")}.${extension}`;
+    const metadata = {
+      contentType,
+      fileName: originalName,
+      productId,
+      field,
+      uploadedAt: new Date().toISOString()
+    };
 
-    // Keep uploads reasonably small for the free-tier/function path.
-    // App.jsx resizes images to 1024 x 1024 JPEG before upload.
-    const maxBytes = 5 * 1024 * 1024;
-    if (buffer.length > maxBytes) {
-      return json(413, { error: "Image is too large after resizing. Please use a smaller image." });
+    const store = getStoreSafe(event);
+    if (store) {
+      const blob = new Blob([buffer], { type: contentType });
+      await store.set(key, blob, { metadata });
+    } else {
+      await saveLocalImage(key, buffer, metadata);
     }
-
-    const productId = safePart(body.productId, "product");
-    const field = safePart(body.field, "image");
-    const originalName = safePart(String(body.fileName || "image").replace(/\.[^.]+$/, ""), "image");
-    const ext = extensionFromType(contentType);
-    const key = `products/${productId}/${field}-${Date.now()}-${originalName}.${ext}`;
-
-    const store = getStore(STORE_NAME);
-    await store.set(key, buffer);
 
     return json(200, {
       key,
+      url: `/.netlify/functions/image?key=${encodeURIComponent(key)}`,
       contentType,
       size: buffer.length,
-      url: `/.netlify/functions/image?key=${encodeURIComponent(key)}`
+      storage: store ? "netlify-blobs" : "local-dev-file"
     });
   } catch (error) {
     console.error("upload-image failed", error);
-    return json(500, { error: error.message || "Image upload failed" });
+    return json(500, { error: error?.message || "Image upload failed." });
   }
 };

@@ -1,41 +1,92 @@
-const { getStore } = require("@netlify/blobs");
+import * as netlifyBlobs from "@netlify/blobs";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
-const STORE_NAME = "product-images";
+const STORE_NAME = "hd-images";
+const LOCAL_UPLOAD_DIR = path.join(process.cwd(), ".netlify", "local-image-uploads");
 
-function contentTypeFromKey(key) {
-  const lower = String(key || "").toLowerCase();
-  if (lower.endsWith(".png")) return "image/png";
-  if (lower.endsWith(".webp")) return "image/webp";
-  if (lower.endsWith(".gif")) return "image/gif";
-  if (lower.endsWith(".svg")) return "image/svg+xml";
+function sanitizePart(value, fallback = "file") {
+  return String(value || fallback)
+    .trim()
+    .replace(/[^a-z0-9._-]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 90) || fallback;
+}
+
+function getStoreSafe(event) {
+  try {
+    if (typeof netlifyBlobs.connectLambda === "function") netlifyBlobs.connectLambda(event);
+    return netlifyBlobs.getStore(STORE_NAME);
+  } catch (error) {
+    if (error?.name !== "MissingBlobsEnvironmentError") throw error;
+    return null;
+  }
+}
+
+function localPathForKey(key) {
+  const safeParts = String(key || "").split("/").map((part) => sanitizePart(part, "file"));
+  return path.join(LOCAL_UPLOAD_DIR, ...safeParts);
+}
+
+function inferContentType(key) {
+  const clean = String(key || "").toLowerCase();
+  if (clean.endsWith(".png")) return "image/png";
+  if (clean.endsWith(".webp")) return "image/webp";
+  if (clean.endsWith(".gif")) return "image/gif";
   return "image/jpeg";
 }
 
-exports.handler = async (event) => {
-  if (event.httpMethod !== "GET") {
-    return { statusCode: 405, body: "Method not allowed" };
-  }
-
+async function readLocalImage(key) {
+  const filePath = localPathForKey(key);
+  const data = await fs.readFile(filePath);
+  let metadata = {};
   try {
-    const key = event.queryStringParameters && event.queryStringParameters.key;
-    if (!key) return { statusCode: 400, body: "Missing image key" };
+    metadata = JSON.parse(await fs.readFile(`${filePath}.json`, "utf8"));
+  } catch {
+    metadata = {};
+  }
+  return { data, metadata };
+}
 
-    const store = getStore(STORE_NAME);
-    const data = await store.get(key, { type: "arrayBuffer" });
+export const handler = async (event) => {
+  try {
+    const key = event.queryStringParameters?.key || "";
+    if (!key || key.includes("..")) {
+      return { statusCode: 400, body: "Missing or invalid image key." };
+    }
 
-    if (!data) return { statusCode: 404, body: "Image not found" };
+    let data;
+    let metadata = {};
+    const store = getStoreSafe(event);
+
+    if (store) {
+      if (typeof store.getWithMetadata === "function") {
+        const result = await store.getWithMetadata(key, { type: "arrayBuffer" });
+        data = result?.data ? Buffer.from(result.data) : null;
+        metadata = result?.metadata || {};
+      } else {
+        const result = await store.get(key, { type: "arrayBuffer" });
+        data = result ? Buffer.from(result) : null;
+      }
+    } else {
+      const local = await readLocalImage(key);
+      data = local.data;
+      metadata = local.metadata;
+    }
+
+    if (!data) return { statusCode: 404, body: "Image not found." };
 
     return {
       statusCode: 200,
-      isBase64Encoded: true,
       headers: {
-        "Content-Type": contentTypeFromKey(key),
+        "Content-Type": metadata.contentType || inferContentType(key),
         "Cache-Control": "public, max-age=31536000, immutable"
       },
-      body: Buffer.from(data).toString("base64")
+      body: Buffer.from(data).toString("base64"),
+      isBase64Encoded: true
     };
   } catch (error) {
-    console.error("image function failed", error);
-    return { statusCode: 500, body: error.message || "Image read failed" };
+    console.error("image failed", error);
+    return { statusCode: 500, body: error?.message || "Image failed." };
   }
 };

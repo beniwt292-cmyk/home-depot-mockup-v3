@@ -9,6 +9,143 @@ import {
 const API_BASE = "";
 const FUNCTION_PRODUCTS_URL = `${API_BASE}/.netlify/functions/products`;
 const FUNCTION_UPLOAD_IMAGE_URL = `${API_BASE}/.netlify/functions/upload-image`;
+const CATEGORY_LANDING_PATH = "/window-treatments";
+const CATEGORY_GRID_PATH = "/window-treatments/products";
+const PRODUCT_ROUTE_PREFIX = "/window-treatments/product";
+const DEFAULT_GRID_SORT = "top";
+const DEFAULT_ACTIVE_FILTERS = { category: "", brand: "", lift: "", shopType: "", included: "", features: "", event: "" };
+const GRID_FILTER_QUERY_KEYS = {
+  category: "category",
+  brand: "brand",
+  lift: "lift",
+  shopType: "shopType",
+  included: "included",
+  features: "features",
+  event: "event"
+};
+
+function normalizeAppPath(path) {
+  const clean = String(path || "/").split("?")[0].split("#")[0] || "/";
+  return clean.length > 1 ? clean.replace(/\/+$/, "") : clean;
+}
+
+function getCurrentAppPath() {
+  if (typeof window === "undefined") return CATEGORY_GRID_PATH;
+  return normalizeAppPath(window.location.pathname);
+}
+
+function getCurrentAppSearch() {
+  if (typeof window === "undefined") return "";
+  return window.location.search || "";
+}
+
+function readGridUrlState(search = "") {
+  const params = new URLSearchParams(String(search || "").replace(/^\?/, ""));
+  const activeFilters = Object.fromEntries(
+    Object.entries(GRID_FILTER_QUERY_KEYS).map(([filterKey, queryKey]) => [filterKey, params.get(queryKey) || ""])
+  );
+
+  return {
+    activeFilters: { ...DEFAULT_ACTIVE_FILTERS, ...activeFilters },
+    storeTodayOnly: params.get("storeToday") === "1",
+    freeDeliveryOnly: params.get("freeDelivery") === "1",
+    searchQuery: params.get("q") || "",
+    sort: params.get("sort") || DEFAULT_GRID_SORT
+  };
+}
+
+function buildGridQueryString({ activeFilters = DEFAULT_ACTIVE_FILTERS, storeTodayOnly = false, freeDeliveryOnly = false, searchQuery = "", sort = DEFAULT_GRID_SORT } = {}) {
+  const params = new URLSearchParams();
+
+  Object.entries(GRID_FILTER_QUERY_KEYS).forEach(([filterKey, queryKey]) => {
+    const value = String(activeFilters?.[filterKey] || "").trim();
+    if (value) params.set(queryKey, value);
+  });
+
+  if (storeTodayOnly) params.set("storeToday", "1");
+  if (freeDeliveryOnly) params.set("freeDelivery", "1");
+  if (String(searchQuery || "").trim()) params.set("q", String(searchQuery).trim());
+  if (sort && sort !== DEFAULT_GRID_SORT) params.set("sort", sort);
+
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+function getGridRoutePathFromState(state) {
+  return `${CATEGORY_GRID_PATH}${buildGridQueryString(state)}`;
+}
+
+function createEmptyActiveFilters() {
+  return { ...DEFAULT_ACTIVE_FILTERS };
+}
+
+function getCategoryFilterForLink(label, categoryOptions = []) {
+  const cleanLabel = String(label || "").trim();
+  const optionLookup = new Map(categoryOptions.filter(Boolean).map((option) => [String(option).trim().toLowerCase(), String(option).trim()]));
+  const emptyFilters = createEmptyActiveFilters();
+  const findCategory = (...candidates) => candidates.map((candidate) => optionLookup.get(String(candidate || "").trim().toLowerCase())).find(Boolean) || "";
+  const createFilter = ({ categoryCandidates = [], searchQuery = cleanLabel, filters = {} } = {}) => {
+    const category = findCategory(...categoryCandidates);
+    return {
+      activeFilters: { ...emptyFilters, ...filters, category: category || filters.category || "" },
+      searchQuery: category ? "" : searchQuery
+    };
+  };
+
+  switch (cleanLabel) {
+    case "Blinds": return createFilter({ searchQuery: "Blinds" });
+    case "Shades": return createFilter({ searchQuery: "Shades" });
+    case "Curtains & Drapes": return createFilter({ searchQuery: "Curtains" });
+    case "Custom Blinds": return createFilter({ searchQuery: "Blinds", filters: { shopType: "Custom" } });
+    case "Custom Shades": return createFilter({ searchQuery: "Shades", filters: { shopType: "Custom" } });
+    case "Cellular Shades":
+    case "Cellular/Honeycomb Shades": return createFilter({ categoryCandidates: ["Cellular Shades", "Cellular/Honeycomb Shades"] });
+    case "Faux Wood Blinds":
+    case "Premium Faux Wood": return createFilter({ categoryCandidates: ["Faux Wood Blinds"] });
+    case "Roller Shades": return createFilter({ categoryCandidates: ["Roller Shades"] });
+    case "Mini Blinds": return createFilter({ categoryCandidates: ["Vinyl Mini Blinds", "Mini Blinds"] });
+    case "Vertical Blinds": return createFilter({ categoryCandidates: ["Vertical Blinds"] });
+    case "Wood Blinds": return createFilter({ categoryCandidates: ["Wood Blinds"] });
+    case "Blackout Shades": return createFilter({ searchQuery: "Blackout", filters: { features: "Blackout" } });
+    case "Banded Shades": return createFilter({ categoryCandidates: ["Banded Shades"] });
+    case "Solar Shades": return createFilter({ categoryCandidates: ["Solar Shades"] });
+    case "Woven Wood Shades": return createFilter({ categoryCandidates: ["Woven Wood Shades"] });
+    case "Roman Shades": return createFilter({ searchQuery: "Roman Shades" });
+    case "Shutters": return createFilter({ categoryCandidates: ["Plantation Shutters", "Shutters"] });
+    case "Curtain Rods": return createFilter({ searchQuery: "Curtain Rods" });
+    case "Curtain Hardware": return createFilter({ searchQuery: "Curtain Hardware" });
+    default: return createFilter();
+  }
+}
+
+function getProductRouteKey(product) {
+  return String(product?.model || product?.id || "").trim();
+}
+
+function getProductRoutePath(product) {
+  return `${PRODUCT_ROUTE_PREFIX}/${encodeURIComponent(getProductRouteKey(product))}`;
+}
+
+function getConfiguratorRoutePath(product) {
+  return `${getProductRoutePath(product)}/configure`;
+}
+
+function parseAppRoute(path) {
+  const clean = normalizeAppPath(path);
+  if (clean === "/") return { type: "grid", path: CATEGORY_GRID_PATH, replacePath: CATEGORY_GRID_PATH };
+  if (clean === CATEGORY_LANDING_PATH) return { type: "category", path: clean };
+  if (clean === CATEGORY_GRID_PATH) return { type: "grid", path: clean };
+
+  const parts = clean.split("/").filter(Boolean);
+  if (parts[0] === "window-treatments" && parts[1] === "product" && parts[2]) {
+    const productModel = decodeURIComponent(parts[2]);
+    if (parts.length === 3) return { type: "product", path: clean, productModel };
+    if (parts.length === 4 && parts[3] === "configure") return { type: "configurator", path: clean, productModel };
+  }
+
+  return { type: "grid", path: CATEGORY_GRID_PATH, replacePath: CATEGORY_GRID_PATH };
+}
+
 
 const FILTER_GROUPS = [
   { key: "category", title: "Category", options: ["Faux Wood Blinds", "Wood Blinds", "Vertical Blinds", "Roller Shades", "Banded Shades", "Solar Shades", "Woven Wood Shades", "Cellular Shades", "Vinyl Mini Blinds", "Plantation Shutters"] },
@@ -21,12 +158,63 @@ const FRACTIONS = ["0", "1/8", "1/4", "3/8", "1/2", "5/8", "3/4", "7/8"];
 
 const SHOP_TYPE_OPTIONS = ["Custom", "Pre-Cut"];
 const DEFAULT_GALLERY_IMAGE_NAMES = ["Lifestyle Image", "Key Benefits", "What's in the Box"];
+const VENETA_LOGO_URL = "/veneta-logo.svg";
 
+
+const DEFAULT_CATEGORY_PAGE_SETTINGS = {
+  topBanner: {
+    label: "Sponsored",
+    imageUrl: "",
+    headline: "TRANSFORM YOUR HOME WITH VENETA SHADES",
+    ctaText: "Shop Now",
+    ctaUrl: CATEGORY_GRID_PATH
+  },
+  sideBanner: {
+    label: "Sponsored",
+    imageUrl: "",
+    headline: "VENETA MAKES DIY EASY",
+    ctaText: "Shop Now",
+    ctaUrl: CATEGORY_GRID_PATH
+  },
+  hero: {
+    imageUrl: "",
+    kicker: "Limited Time",
+    headline: "UP TO 40% OFF",
+    body: "Select Custom Blinds & Shades. Ends 5/13.",
+    ctaText: "Shop Now"
+  }
+};
+
+function mergeCategorySection(defaults, value) {
+  const source = value && typeof value === "object" ? value : {};
+  return Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [key, typeof source[key] === "string" ? source[key] : fallback]));
+}
+
+function mergeCategoryPageSettings(value) {
+  const source = value && typeof value === "object" ? value : {};
+  const topBannerSource = source.topBanner && typeof source.topBanner === "object" ? source.topBanner : {};
+  const topBanner = mergeCategorySection(DEFAULT_CATEGORY_PAGE_SETTINGS.topBanner, topBannerSource);
+
+  if (!String(topBannerSource.headline || "").trim()) {
+    const migratedHeadline = [topBannerSource.headlineLine1, topBannerSource.headlineLine2]
+      .map((part) => String(part || "").trim())
+      .filter(Boolean)
+      .join(" ");
+    if (migratedHeadline) topBanner.headline = migratedHeadline;
+  }
+
+  return {
+    topBanner,
+    sideBanner: mergeCategorySection(DEFAULT_CATEGORY_PAGE_SETTINGS.sideBanner, source.sideBanner),
+    hero: mergeCategorySection(DEFAULT_CATEGORY_PAGE_SETTINGS.hero, source.hero)
+  };
+}
 
 const DEFAULT_MOCKUP_SETTINGS = {
   hoverEnabled: true,
   showReferenceBorders: false,
-  placeholderNonBordered: false
+  placeholderNonBordered: false,
+  categoryPage: DEFAULT_CATEGORY_PAGE_SETTINGS
 };
 
 function mergeMockupSettings(value) {
@@ -34,7 +222,8 @@ function mergeMockupSettings(value) {
   return {
     hoverEnabled: typeof source.hoverEnabled === "boolean" ? source.hoverEnabled : DEFAULT_MOCKUP_SETTINGS.hoverEnabled,
     showReferenceBorders: typeof source.showReferenceBorders === "boolean" ? source.showReferenceBorders : DEFAULT_MOCKUP_SETTINGS.showReferenceBorders,
-    placeholderNonBordered: typeof source.placeholderNonBordered === "boolean" ? source.placeholderNonBordered : DEFAULT_MOCKUP_SETTINGS.placeholderNonBordered
+    placeholderNonBordered: typeof source.placeholderNonBordered === "boolean" ? source.placeholderNonBordered : DEFAULT_MOCKUP_SETTINGS.placeholderNonBordered,
+    categoryPage: mergeCategoryPageSettings(source.categoryPage)
   };
 }
 
@@ -50,9 +239,21 @@ function extractMockupSettings(data, products = []) {
   return null;
 }
 
-function applyMockupSettingsToProducts(products, settings) {
+function createProductsBlobPayload(products, settings) {
   const cleanSettings = mergeMockupSettings(settings);
-  return products.map((product) => ({ ...product, mockupSettings: cleanSettings }));
+  const cleanProducts = (Array.isArray(products) ? products : []).map((product) => {
+    if (!product || typeof product !== "object") return product;
+    const { mockupSettings, ...rest } = product;
+    return rest;
+  });
+  return {
+    products: cleanProducts,
+    mockupSettings: cleanSettings
+  };
+}
+
+function applyMockupSettingsToProducts(products, settings) {
+  return createProductsBlobPayload(products, settings);
 }
 
 
@@ -335,6 +536,63 @@ function normalizeShopType(value) {
 function isStoreTodayShopType(value) {
   const v = String(value || "").trim().toLowerCase();
   return v === "pre-cut" || v === "in stock";
+}
+
+function normalizeSearchText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\bblinds\b/g, "blind")
+    .replace(/\bshades\b/g, "shade")
+    .replace(/\bcurtains\b/g, "curtain")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function expandSearchQuery(value) {
+  const normalized = normalizeSearchText(value);
+  if (!normalized) return [];
+
+  const aliases = [
+    [/\bfax\s+wood\b/g, "faux wood"],
+    [/\bfox\s+wood\b/g, "faux wood"],
+    [/\bfauxwood\b/g, "faux wood"],
+    [/\bfo\s+wood\b/g, "faux wood"],
+    [/\bcell\s+shade\b/g, "cellular shade"],
+    [/\bcellular\s+blind\b/g, "cellular shade"],
+    [/\bhoney\s*comb\b/g, "cellular"],
+    [/\bzebra\s+(blind|shade)\b/g, "banded shade"],
+    [/\blayered\s+(blind|shade)\b/g, "banded shade"],
+    [/\broller\s+blind\b/g, "roller shade"],
+    [/\bblack\s*out\b/g, "blackout"],
+    [/\broom\s+dark\b/g, "room darkening"],
+    [/\bmini\s+blind\b/g, "vinyl mini blind"]
+  ];
+
+  const expanded = new Set([normalized]);
+  aliases.forEach(([pattern, replacement]) => {
+    if (pattern.test(normalized)) expanded.add(normalized.replace(pattern, replacement));
+  });
+
+  const compact = normalized.replace(/\s+/g, "");
+  if (compact.includes("fauxwood")) expanded.add(normalized.replace(/faux\s*wood|fauxwood|fax\s*wood|fox\s*wood/g, "faux wood"));
+
+  return Array.from(expanded).filter(Boolean);
+}
+
+function searchTextMatches(haystack, query) {
+  const normalizedHaystack = normalizeSearchText(haystack);
+  const queryVariants = expandSearchQuery(query);
+  if (!queryVariants.length) return true;
+
+  return queryVariants.some((variant) => {
+    if (normalizedHaystack.includes(variant)) return true;
+    const terms = variant.split(" ").filter((term) => term.length > 1);
+    return terms.length > 0 && terms.every((term) => normalizedHaystack.includes(term));
+  });
 }
 
 function imgSrc(url) {
@@ -2117,7 +2375,7 @@ function ConfiguratorSettingsEditor({ schema, setSchema, product = null, isEdite
   );
 }
 
-function EditorPanel({ products, displayProducts, editorMode = "grid", setProducts, onClose, saveProducts, saveStatus, reloadProducts, placeholderNonBordered, setPlaceholderNonBordered }) {
+function EditorPanel({ products, displayProducts, editorMode = "grid", setProducts, onClose, saveProducts, saveStatus, reloadProducts, placeholderNonBordered, setPlaceholderNonBordered, mockupSettings, setMockupSettings }) {
   const [uploading, setUploading] = useState("");
   const [galleryDragging, setGalleryDragging] = useState(null);
   const [galleryDropTarget, setGalleryDropTarget] = useState(null);
@@ -2136,6 +2394,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
   };
   const isConfiguratorEditor = editorMode === "configurator";
   const isProductEditor = editorMode === "product";
+  const isCategoryEditor = editorMode === "category";
   const orderedProducts = Array.isArray(displayProducts) && displayProducts.length ? displayProducts : products;
   const activeConfiguratorProduct = isConfiguratorEditor ? orderedProducts[0] : null;
   const activeConfiguratorSchema = activeConfiguratorProduct ? getProductConfiguratorSchema(activeConfiguratorProduct) : DEFAULT_CONFIGURATOR_SCHEMA;
@@ -2145,7 +2404,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
   const activeConfiguratorCustomOptionCount = (activeConfiguratorSchema.customSections || []).reduce((sum, section) => sum + (Array.isArray(section.options) ? section.options.length : 0), 0);
 
   const editorVisibleProducts = useMemo(() => {
-    if (isConfiguratorEditor) return [];
+    if (isConfiguratorEditor || isCategoryEditor) return [];
     if (isProductEditor) return orderedProducts;
     const q = editorSearch.trim().toLowerCase();
     if (!q) return orderedProducts;
@@ -2158,7 +2417,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
       product.internet,
       product.badge
     ].join(" ").toLowerCase().includes(q));
-  }, [orderedProducts, editorSearch, isProductEditor, isConfiguratorEditor]);
+  }, [orderedProducts, editorSearch, isProductEditor, isConfiguratorEditor, isCategoryEditor]);
 
   const handleEditorSave = async () => {
     const saved = await saveProducts();
@@ -2479,6 +2738,30 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
     reader.readAsDataURL(file);
   });
 
+  const resizeImageFileToContainedDataUrl = (file, maxWidth = 1800, maxHeight = 900, quality = 0.72) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read image file"));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("Could not load image for resizing"));
+      image.onload = () => {
+        const scale = Math.min(1, maxWidth / image.width, maxHeight / image.height);
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(image, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      image.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  });
+
   const uploadImageAsset = async (id, field, file) => {
     const dataUrl = await resizeImageFileToSquareDataUrl(file, 1024);
 
@@ -2515,6 +2798,46 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
       setUploading("");
     }
   };
+  const uploadCategoryImageAsset = async (section, field, file) => {
+    const imageLimits = {
+      topBanner: { width: 1200, height: 400 },
+      sideBanner: { width: 800, height: 900 },
+      hero: { width: 1400, height: 900 }
+    };
+    const limits = imageLimits[section] || { width: 1200, height: 700 };
+    return resizeImageFileToContainedDataUrl(file, limits.width, limits.height, 0.72);
+  };
+
+  const updateCategoryPageField = (section, field, value) => {
+    if (!setMockupSettings) return;
+    setMockupSettings((current) => {
+      const categoryPage = mergeCategoryPageSettings(current?.categoryPage);
+      return mergeMockupSettings({
+        ...current,
+        categoryPage: {
+          ...categoryPage,
+          [section]: {
+            ...categoryPage[section],
+            [field]: value
+          }
+        }
+      });
+    });
+  };
+
+  const uploadCategoryImage = async (section, field, file) => {
+    if (!file) return;
+    setUploading(`category-${section}-${field}`);
+    try {
+      const result = await uploadCategoryImageAsset(section, field, file);
+      updateCategoryPageField(section, field, result);
+    } catch (error) {
+      alert(`Category image upload failed: ${error.message}`);
+    } finally {
+      setUploading("");
+    }
+  };
+
 
   const uploadGalleryImages = async (id, fileList) => {
     const files = Array.from(fileList || []).filter(Boolean);
@@ -2563,6 +2886,104 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
     if (typeof window !== "undefined" && !window.confirm("Reset the full configurator for this product to defaults?")) return;
     updateProduct(activeConfiguratorProduct.id, "configurator", mergeConfiguratorSchema(DEFAULT_CONFIGURATOR_SCHEMA));
   };
+
+  const categoryPageEditor = mergeCategoryPageSettings(mockupSettings?.categoryPage);
+  const renderCategoryTextField = (section, field, label, multiline = false) => (
+    <label className="editor-field category-editor-field">
+      <span>{label}</span>
+      {multiline ? (
+        <textarea value={categoryPageEditor[section][field] || ""} rows={3} onChange={(e) => updateCategoryPageField(section, field, e.target.value)} />
+      ) : (
+        <input value={categoryPageEditor[section][field] || ""} onChange={(e) => updateCategoryPageField(section, field, e.target.value)} />
+      )}
+    </label>
+  );
+  const renderCategoryImageField = (section, field, label, helper) => {
+    const value = categoryPageEditor[section][field] || "";
+    const uploadKey = `category-${section}-${field}`;
+    return (
+      <div className="editor-field category-editor-image-field">
+        <label><span>{label}</span><input value={value} onChange={(e) => updateCategoryPageField(section, field, e.target.value)} placeholder="Paste image URL or upload below" /></label>
+        <div className="category-editor-image-row">
+          <div className="category-editor-image-preview">{value ? <img src={imgSrc(value)} alt={label} /> : <span>No image selected</span>}</div>
+          <label className="editor-upload-pill-button">
+            <Upload size={15} /> <span>{uploading === uploadKey ? "Uploading..." : "Upload Image"}</span>
+            <input type="file" accept="image/*" onChange={(e) => { uploadCategoryImage(section, field, e.target.files?.[0]); e.target.value = ""; }} />
+          </label>
+        </div>
+        {helper ? <small>{helper}</small> : null}
+      </div>
+    );
+  };
+
+  if (isCategoryEditor) {
+    return (
+      <div className="editor-overlay editor-overlay-product" onClick={onClose}>
+        <div className="editor-panel editor-panel-product editor-panel-configurator category-editor-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="editor-sticky-top">
+            <div className="editor-header">
+              <div>
+                <div className="editor-kicker"><Pencil size={15} /> Category page panel</div>
+                <h2>Category Page Editor</h2>
+                <p>Edit category page copy and campaign images. Logo assets are served from public files, while banner and hero images save with the category page data.</p>
+              </div>
+              <button onClick={onClose}><X size={22} /></button>
+            </div>
+            <div className="editor-actions editor-actions-enhanced">
+              <button onClick={handleEditorSave} className="save-action"><Save size={16} /> Save Category Page</button>
+              <button onClick={reloadProducts} className="secondary-action"><RotateCcw size={16} /> Reload</button>
+              {saveStatus && <span className="save-status">{saveStatus}</span>}
+            </div>
+          </div>
+
+          <div className="category-editor-workspace">
+            <div className="category-editor-controls" aria-label="Category page editable fields">
+              <section className="editor-card apple-editor-card editor-card-expanded category-editor-card">
+                <div className="category-editor-section-head"><span>Top sponsored banner</span><strong>VENETA strip</strong></div>
+                <div className="category-editor-grid">
+                  {renderCategoryTextField("topBanner", "label", "Sponsored label")}
+                  {renderCategoryTextField("topBanner", "headline", "Headline", true)}
+                  {renderCategoryTextField("topBanner", "ctaText", "CTA text")}
+                  {renderCategoryTextField("topBanner", "ctaUrl", "CTA destination")}
+                  <label className="editor-field category-editor-field">
+                    <span>Static public logo</span>
+                    <input readOnly value={CATEGORY_PAGE_IMAGES.topLogo} />
+                  </label>
+                  {renderCategoryImageField("topBanner", "imageUrl", "Right banner image", "Use the room/blinds image cropped for the right side of the banner.")}
+                </div>
+              </section>
+
+              <section className="editor-card apple-editor-card editor-card-expanded category-editor-card">
+                <div className="category-editor-section-head"><span>Left sponsored banner</span><strong>Vertical ad</strong></div>
+                <div className="category-editor-grid">
+                  {renderCategoryTextField("sideBanner", "label", "Sponsored label")}
+                  {renderCategoryTextField("sideBanner", "headline", "Headline", true)}
+                  {renderCategoryTextField("sideBanner", "ctaText", "CTA text")}
+                  {renderCategoryTextField("sideBanner", "ctaUrl", "CTA destination")}
+                  <label className="editor-field category-editor-field">
+                    <span>Static public logo</span>
+                    <input readOnly value={CATEGORY_PAGE_IMAGES.sideLogo} />
+                  </label>
+                  {renderCategoryImageField("sideBanner", "imageUrl", "Top image", "Image shown below the orange bar.")}
+                </div>
+              </section>
+
+              <section className="editor-card apple-editor-card editor-card-expanded category-editor-card">
+                <div className="category-editor-section-head"><span>Main hero promotion</span><strong>Category hero</strong></div>
+                <div className="category-editor-grid">
+                  {renderCategoryTextField("hero", "kicker", "Kicker")}
+                {renderCategoryTextField("hero", "headline", "Headline")}
+                  {renderCategoryTextField("hero", "body", "Body", true)}
+                  {renderCategoryTextField("hero", "ctaText", "CTA text")}
+                  {renderCategoryImageField("hero", "imageUrl", "Hero image", "Large image on the right side of the hero banner.")}
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isConfiguratorEditor) {
     return (
@@ -2816,7 +3237,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
                                   <div className="editor-stock-colors">
                                     <div className="editor-gallery-title-row"><div><strong>Color / Finish Swatches</strong><span>Add, duplicate, reorder, or remove swatches for the stock PDP color selector.</span></div><button type="button" className="editor-add-link-button" onClick={() => addStockColor(p.id)}><Plus size={14} /> Add Color</button></div>
                                     {stockOptions.colors.map((color, index) => (
-                                      <div key={`${color.key}-${index}`} className="editor-stock-color-row">
+                                      <div key={`stock-color-${p.id}-${index}`} className="editor-stock-color-row">
                                         <div className="editor-stock-color-preview" style={{ background: color.swatchColor }}>{color.swatchImageUrl ? <img src={imgSrc(color.swatchImageUrl)} alt="" /> : null}</div>
                                         <input value={color.label || ""} onChange={(e) => updateStockColor(p.id, index, "label", e.target.value)} placeholder="Color label" />
                                         <input value={color.key || ""} onChange={(e) => updateStockColor(p.id, index, "key", e.target.value)} placeholder="color-key" />
@@ -2902,7 +3323,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
                                       const galleryDropClass = isGalleryDropTarget ? `gallery-drop-${galleryDropTarget.position}` : "";
                                       return (
                                         <GalleryImageRow
-                                          key={`${i}-${img || "empty"}`}
+                                          key={`gallery-image-${p.id}-${i}`}
                                           productId={p.id}
                                           img={img}
                                           index={i}
@@ -2956,11 +3377,216 @@ function QuickViewModal({ product, onClose }) {
   return <div className="quick-overlay" onClick={onClose}><div className="quick-panel" onClick={(e) => e.stopPropagation()}><div className="quick-head"><b>Quick View Mockup</b><button onClick={onClose}><X size={20} /></button></div><div className="quick-grid"><div className="quick-image">{imageToShow ? <img src={imgSrc(imageToShow)} alt={product.name} /> : <div className="missing-image">Image Needed</div>}</div><div><div className="quick-tabs"><button className={mode === "primary" ? "active" : ""} onClick={() => setMode("primary")}>Primary Image</button><button className={mode === "hover" ? "active" : ""} onClick={() => setMode("hover")}>Hover Image</button></div><Rating rating={product.rating} reviews={product.reviews} /><h2>{product.brand} {product.name}</h2><p>Model# {product.model}</p><button className="build-button">Build and Buy</button></div></div></div></div>;
 }
 
+
+const HOME_DEPOT_CATEGORY_IMAGE_BASE = "https://www.homedepot.ca";
+
+const CATEGORY_PAGE_IMAGES = {
+  topLogo: VENETA_LOGO_URL,
+  topBanner: "",
+  hero: "",
+  sideLogo: VENETA_LOGO_URL,
+  sideAd: "",
+  featureCards: {
+    fauxWoodBlinds: `${HOME_DEPOT_CATEGORY_IMAGE_BASE}/content/dam/assethub/images/categories/2024-oct-clp-blinds-shades-faux-wood-1000x500.png`,
+    woodBlinds: `${HOME_DEPOT_CATEGORY_IMAGE_BASE}/content/dam/homedepot/images/categories/decor/blinds-%26-shades/2023/2023-clp-blinds-shades-wood-1000x500.jpg`,
+    cellularHoneycombShades: `${HOME_DEPOT_CATEGORY_IMAGE_BASE}/content/dam/homedepot/images/categories/decor/blinds-%26-shades/2023/2023-clp-blinds-shades-cellular-1000x500.jpg`
+  },
+  blindsTiles: {
+    woodBlinds: `${HOME_DEPOT_CATEGORY_IMAGE_BASE}/content/dam/homedepot/images/categories/decor/blinds-%26-shades/2023/2023-clp-blinds-shades-wood-1000x500.jpg`,
+    premiumFauxWood: `${HOME_DEPOT_CATEGORY_IMAGE_BASE}/content/dam/assethub/images/categories/2024-oct-clp-blinds-shades-faux-wood-1000x500.png`,
+    miniBlinds: `${HOME_DEPOT_CATEGORY_IMAGE_BASE}/content/dam/assethub/images/categories/2024-oct-clp-blinds-shades-vinyl-1000x500.png`,
+    customBlinds: `${HOME_DEPOT_CATEGORY_IMAGE_BASE}/content/dam/assethub/images/categories/2024-oct-clp-blinds-shades-custom-1000x500.png`,
+    verticalBlinds: `${HOME_DEPOT_CATEGORY_IMAGE_BASE}/content/dam/homedepot/images/categories/decor/blinds-%26-shades/2023/2023-clp-blinds-shades-vertical-1000x500.jpg`,
+    shutters: `${HOME_DEPOT_CATEGORY_IMAGE_BASE}/content/dam/assethub/images/home-services/2025-oct-hs-blinds-shutters-1400x1400.jpg`
+  },
+  shadesTiles: {
+    cellularShades: `${HOME_DEPOT_CATEGORY_IMAGE_BASE}/content/dam/homedepot/images/categories/decor/blinds-%26-shades/2023/2023-clp-blinds-shades-cellular-1000x500.jpg`,
+    rollerShades: `${HOME_DEPOT_CATEGORY_IMAGE_BASE}/content/dam/homedepot/images/categories/decor/blinds-%26-shades/2023/2023-clp-blinds-shades-roller-1000x500.jpg`,
+    bandedShades: `${HOME_DEPOT_CATEGORY_IMAGE_BASE}/content/dam/homedepot/images/categories/decor/blinds-%26-shades/2023/2023-clp-blinds-shades-banded-1000x500.jpg`,
+    solarShades: `${HOME_DEPOT_CATEGORY_IMAGE_BASE}/content/dam/homedepot/images/categories/decor/blinds-%26-shades/2023/2023-clp-blinds-shades-solar-1000x500.jpg`,
+    customShades: `${HOME_DEPOT_CATEGORY_IMAGE_BASE}/content/dam/assethub/images/categories/2024-oct-clp-blinds-shades-custom-1000x500.png`,
+    blackoutShades: `${HOME_DEPOT_CATEGORY_IMAGE_BASE}/content/dam/homedepot/images/categories/decor/blinds-%26-shades/2023/2023-clp-blinds-shades-roller-1000x500.jpg`
+  }
+};
+
+function CategoryLandingPage({ products = [], onShopGrid, onCategoryLink, onNavigateCategoryFilter, categoryPageSettings }) {
+  const imageCandidates = products.filter((product) => product?.imageUrl || product?.hoverImageUrl || product?.galleryImages?.length);
+  const getProductImage = (keywords = [], offset = 0) => {
+    const words = Array.isArray(keywords) ? keywords : [keywords];
+    const matches = imageCandidates.filter((product) => {
+      const haystack = [product?.name, product?.brand, product?.category, product?.light, product?.model, product?.features].flat().join(" ").toLowerCase();
+      return words.some((word) => haystack.includes(String(word).toLowerCase()));
+    });
+    const product = matches[offset % Math.max(matches.length, 1)] || imageCandidates[offset % Math.max(imageCandidates.length, 1)] || {};
+    return product?.hoverImageUrl || product?.imageUrl || product?.galleryImages?.[0] || "";
+  };
+  const categoryImage = (value, fallback) => String(value || "").trim() || fallback || "";
+  const categoryPage = mergeCategoryPageSettings(categoryPageSettings);
+
+  const heroImage = categoryImage(categoryPage.hero.imageUrl || CATEGORY_PAGE_IMAGES.hero, getProductImage(["wood", "blind", "faux"], 0));
+  const topLogoImage = categoryImage(CATEGORY_PAGE_IMAGES.topLogo, "");
+  const bannerImage = categoryImage(categoryPage.topBanner.imageUrl || CATEGORY_PAGE_IMAGES.topBanner, "");
+  const sideLogoImage = categoryImage(CATEGORY_PAGE_IMAGES.sideLogo, "");
+  const sideAdImage = categoryImage(categoryPage.sideBanner.imageUrl || CATEGORY_PAGE_IMAGES.sideAd, getProductImage(["drill", "hardware", "headrail"], 2) || heroImage);
+  const topSponsoredBanner = {
+    label: categoryPage.topBanner.label,
+    brand: "VENETA",
+    headline: categoryPage.topBanner.headline,
+    cta: categoryPage.topBanner.ctaText,
+    ctaUrl: categoryPage.topBanner.ctaUrl,
+    imageAlt: "VENETA shades room promotion"
+  };
+  const sideSponsoredBanner = {
+    label: categoryPage.sideBanner.label,
+    brand: "VENETA",
+    headline: categoryPage.sideBanner.headline,
+    cta: categoryPage.sideBanner.ctaText,
+    ctaUrl: categoryPage.sideBanner.ctaUrl,
+    imageAlt: "VENETA window treatment promotion"
+  };
+  const navSections = [
+    { title: "", links: ["Blinds", "Shades", "Curtains & Drapes"] },
+    { title: "Shop Custom", links: ["Custom Blinds", "Custom Shades"] },
+    { title: "Shop by Type", links: ["Cellular Shades", "Faux Wood Blinds", "Roller Shades", "Mini Blinds", "Vertical Blinds", "Wood Blinds", "Blackout Shades", "Roman Shades"] },
+    { title: "Shop Hardware", links: ["Curtain Rods", "Curtain Hardware"] }
+  ];
+  const featureCards = [
+    { title: "Faux Wood Blinds", filterLabel: "Faux Wood Blinds", copy: "Get the upscale look of wood blinds with 2 in. slats at an affordable price.", image: categoryImage(CATEGORY_PAGE_IMAGES.featureCards.fauxWoodBlinds, "") },
+    { title: "Wood Blinds", filterLabel: "Wood Blinds", copy: "Adds an air of elegance and sophistication. Features thicker slats so they can produce a larger stack when raised.", image: categoryImage(CATEGORY_PAGE_IMAGES.featureCards.woodBlinds, "") },
+    { title: "Cellular/Honeycomb Shades", filterLabel: "Cellular Shades", copy: "Save on utility costs with energy-efficient designs that control light and help keep your home comfortable year-round.", image: categoryImage(CATEGORY_PAGE_IMAGES.featureCards.cellularHoneycombShades, "") }
+  ];
+  const blinds = [
+    { name: "Wood Blinds", filterLabel: "Wood Blinds", image: categoryImage(CATEGORY_PAGE_IMAGES.blindsTiles.woodBlinds, "") },
+    { name: "Premium Faux Wood", filterLabel: "Faux Wood Blinds", image: categoryImage(CATEGORY_PAGE_IMAGES.blindsTiles.premiumFauxWood, "") },
+    { name: "Mini Blinds", filterLabel: "Mini Blinds", image: categoryImage(CATEGORY_PAGE_IMAGES.blindsTiles.miniBlinds, "") },
+    { name: "Custom Blinds", filterLabel: "Custom Blinds", image: categoryImage(CATEGORY_PAGE_IMAGES.blindsTiles.customBlinds, "") },
+    { name: "Vertical Blinds", filterLabel: "Vertical Blinds", image: categoryImage(CATEGORY_PAGE_IMAGES.blindsTiles.verticalBlinds, "") },
+    { name: "Shutters", filterLabel: "Shutters", image: categoryImage(CATEGORY_PAGE_IMAGES.blindsTiles.shutters, "") }
+  ];
+  const shades = [
+    { name: "Cellular Shades", filterLabel: "Cellular Shades", image: categoryImage(CATEGORY_PAGE_IMAGES.shadesTiles.cellularShades, "") },
+    { name: "Roller Shades", filterLabel: "Roller Shades", image: categoryImage(CATEGORY_PAGE_IMAGES.shadesTiles.rollerShades, "") },
+    { name: "Banded Shades", filterLabel: "Banded Shades", image: categoryImage(CATEGORY_PAGE_IMAGES.shadesTiles.bandedShades, "") },
+    { name: "Solar Shades", filterLabel: "Solar Shades", image: categoryImage(CATEGORY_PAGE_IMAGES.shadesTiles.solarShades, "") },
+    { name: "Custom Shades", filterLabel: "Custom Shades", image: categoryImage(CATEGORY_PAGE_IMAGES.shadesTiles.customShades, "") },
+    { name: "Blackout Shades", filterLabel: "Blackout Shades", image: categoryImage(CATEGORY_PAGE_IMAGES.shadesTiles.blackoutShades, "") }
+  ];
+
+  const CategoryImage = ({ src, alt }) => src ? <img src={imgSrc(src)} alt={alt} /> : <span className="hd-category-image-placeholder">Image Needed</span>;
+  const handleCategoryLinkClick = (link) => {
+    if (typeof onNavigateCategoryFilter === "function") onNavigateCategoryFilter(link);
+    else if (typeof onShopGrid === "function") onShopGrid();
+  };
+  const handleBannerCta = (url) => {
+    if (typeof onCategoryLink === "function") {
+      onCategoryLink(url);
+      return;
+    }
+    onShopGrid();
+  };
+
+  return (
+    <div className="hd-category-landing-page">
+      <div className="hd-cat-breadcrumb hd-category-landing-breadcrumb"><button type="button" onClick={onShopGrid}>Home</button><span>/</span><span>Window Treatments</span></div>
+
+      <section className="hd-category-sponsored-banner hd-sponsored-veneta-banner" aria-label="Sponsored window treatment promotion">
+        <button type="button" className="hd-sponsored-arrow" aria-label="Previous sponsored promotion"><ChevronRight size={17} /></button>
+        <div className="hd-sponsored-brand-block hd-sponsored-veneta-brand-block">
+          <span>{topSponsoredBanner.label}</span>
+          <div className="hd-veneta-logo-frame">
+            {topLogoImage ? <img src={imgSrc(topLogoImage)} alt={topSponsoredBanner.brand} className="hd-veneta-logo" /> : <div className="hd-veneta-logo-placeholder">VENETA Logo</div>}
+          </div>
+        </div>
+        <div className="hd-sponsored-message hd-sponsored-veneta-message">{topSponsoredBanner.headline}</div>
+        <button type="button" className="hd-sponsored-shop" onClick={() => handleBannerCta(topSponsoredBanner.ctaUrl)}>{topSponsoredBanner.cta}</button>
+        <div className="hd-sponsored-image"><CategoryImage src={bannerImage} alt={topSponsoredBanner.imageAlt} /></div>
+      </section>
+
+      <div className="hd-category-landing-layout">
+        <aside className="hd-category-left-rail" aria-label="Window treatment categories">
+          <h1 className="hd-category-landing-title">WINDOW TREATMENTS</h1>
+          <nav className="hd-category-side-nav">
+            {navSections.map((section, sectionIndex) => (
+              <div className="hd-category-nav-section" key={`${section.title || "top"}-${sectionIndex}`}>
+                {section.title ? <h2>{section.title}</h2> : null}
+                {section.links.map((link) => <button type="button" key={link} onClick={() => handleCategoryLinkClick(link)}>{link}</button>)}
+              </div>
+            ))}
+          </nav>
+          <aside className="hd-category-side-ad" aria-label="Sponsored VENETA promotion">
+            <div className="hd-category-side-ad-strip" aria-hidden="true" />
+            <div className="hd-category-side-ad-image"><CategoryImage src={sideAdImage} alt={sideSponsoredBanner.imageAlt} /></div>
+            <span>{sideSponsoredBanner.label}</span>
+            {sideLogoImage ? <div className="hd-side-logo-frame"><img src={imgSrc(sideLogoImage)} alt={sideSponsoredBanner.brand} className="hd-side-logo-image" /></div> : <strong><span className="hd-mini-veneta-mark">◢</span>{sideSponsoredBanner.brand}</strong>}
+            <h2>{sideSponsoredBanner.headline}</h2>
+            <button type="button" onClick={() => handleBannerCta(sideSponsoredBanner.ctaUrl)}>{sideSponsoredBanner.cta}</button>
+          </aside>
+        </aside>
+
+        <main className="hd-category-landing-main">
+          <section className="hd-category-hero-promo">
+            <div className="hd-category-hero-copy">
+              <p className="hd-category-hero-kicker">{categoryPage.hero.kicker}</p>
+              <h2>{categoryPage.hero.headline}</h2>
+              <p>{categoryPage.hero.body}</p>
+              <button type="button" onClick={onShopGrid}>{categoryPage.hero.ctaText}</button>
+            </div>
+            <div className="hd-category-hero-image"><CategoryImage src={heroImage} alt="Custom blinds and shades promotion" /></div>
+            <div className="hd-category-carousel-control"><ChevronRight size={18} className="hd-category-prev" /><span>1/2</span><ChevronRight size={18} /></div>
+          </section>
+
+          <section className="hd-category-module hd-category-feature-module">
+            <div className="hd-category-module-heading-row"><h2>CHOOSE YOUR BLINDS OR SHADES</h2></div>
+            <div className="hd-category-feature-grid">
+              {featureCards.map((card) => (
+                <article className="hd-category-feature-card" key={card.title}>
+                  <button type="button" className="hd-category-image-action hd-category-feature-image" onClick={() => handleCategoryLinkClick(card.filterLabel)} aria-label={`Shop ${card.title}`}><CategoryImage src={card.image} alt={card.title} /></button>
+                  <h3>{card.title}</h3>
+                  <p>{card.copy}</p>
+                  <button type="button" onClick={() => handleCategoryLinkClick(card.filterLabel)}>Shop Now</button>
+                </article>
+              ))}
+            </div>
+            <div className="hd-category-small-carousel"><ChevronRight size={16} className="hd-category-prev" /><span>1/3</span><ChevronRight size={16} /></div>
+          </section>
+
+          <section className="hd-category-module">
+            <div className="hd-category-module-heading-row"><h2>BLINDS</h2></div>
+            <div className="hd-category-strip-grid">
+              {blinds.map((item) => (
+                <article className="hd-category-small-tile" key={item.name}>
+                  <button type="button" className="hd-category-image-action" onClick={() => handleCategoryLinkClick(item.filterLabel)} aria-label={`Shop ${item.name}`}><CategoryImage src={item.image} alt={item.name} /></button>
+                  <h3>{item.name}</h3>
+                </article>
+              ))}
+            </div>
+            <div className="hd-category-small-carousel"><ChevronRight size={16} className="hd-category-prev" /><span>1/2</span><ChevronRight size={16} /></div>
+          </section>
+
+          <section className="hd-category-module">
+            <div className="hd-category-module-heading-row"><h2>SHADES</h2></div>
+            <div className="hd-category-strip-grid">
+              {shades.map((item) => (
+                <article className="hd-category-small-tile" key={item.name}>
+                  <button type="button" className="hd-category-image-action" onClick={() => handleCategoryLinkClick(item.filterLabel)} aria-label={`Shop ${item.name}`}><CategoryImage src={item.image} alt={item.name} /></button>
+                  <h3>{item.name}</h3>
+                </article>
+              ))}
+            </div>
+            <div className="hd-category-small-carousel"><ChevronRight size={16} className="hd-category-prev" /><span>1/2</span><ChevronRight size={16} /></div>
+          </section>
+        </main>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [products, setProducts] = useState([]);
   const [mockupSettings, setMockupSettings] = useState(DEFAULT_MOCKUP_SETTINGS);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sort, setSort] = useState("top");
+  const initialGridUrlState = useMemo(() => readGridUrlState(getCurrentAppSearch()), []);
+  const [searchQuery, setSearchQuery] = useState(initialGridUrlState.searchQuery);
+  const [sort, setSort] = useState(initialGridUrlState.sort);
   const [view, setView] = useState("grid");
   const [hoverEnabled, setHoverEnabled] = useState(DEFAULT_MOCKUP_SETTINGS.hoverEnabled);
   const [showReferenceBorders, setShowReferenceBorders] = useState(DEFAULT_MOCKUP_SETTINGS.showReferenceBorders);
@@ -2972,9 +3598,11 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState("");
   const [selectedProductPage, setSelectedProductPage] = useState(null);
   const [configuratorProductPage, setConfiguratorProductPage] = useState(null);
-  const [activeFilters, setActiveFilters] = useState({ category: "", brand: "", lift: "", shopType: "", included: "", features: "", event: "" });
-  const [storeTodayOnly, setStoreTodayOnly] = useState(false);
-  const [freeDeliveryOnly, setFreeDeliveryOnly] = useState(false);
+  const [showCategoryPage, setShowCategoryPage] = useState(false);
+  const [routePath, setRoutePath] = useState(getCurrentAppPath);
+  const [activeFilters, setActiveFilters] = useState(initialGridUrlState.activeFilters);
+  const [storeTodayOnly, setStoreTodayOnly] = useState(initialGridUrlState.storeTodayOnly);
+  const [freeDeliveryOnly, setFreeDeliveryOnly] = useState(initialGridUrlState.freeDeliveryOnly);
   const [layoutEditMode, setLayoutEditMode] = useState(false);
   const [layoutSnapshot, setLayoutSnapshot] = useState(null);
   const [layoutUiSnapshot, setLayoutUiSnapshot] = useState(null);
@@ -3063,7 +3691,10 @@ export default function App() {
       return true;
     } catch (error) {
       console.error(error);
-      setSaveStatus(`Save failed - ${error.message || "run with Netlify Dev or use the live Netlify site"}`);
+      const message = error?.message === "Failed to fetch"
+        ? "Failed to fetch. Run with npx netlify dev or use the live Netlify site so /.netlify/functions/products is available."
+        : (error.message || "run with Netlify Dev or use the live Netlify site");
+      setSaveStatus(`Save failed - ${message}`);
       return false;
     }
   };
@@ -3073,10 +3704,117 @@ export default function App() {
   };
 
   const clearFilters = () => {
-    setActiveFilters({ category: "", brand: "", lift: "", shopType: "", included: "", features: "", event: "" });
+    setActiveFilters(createEmptyActiveFilters());
     setStoreTodayOnly(false);
     setFreeDeliveryOnly(false);
     setSearchQuery("");
+  };
+
+  const scrollToPageTop = () => {
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const navigateToAppPath = (path, { replace = false } = {}) => {
+    const rawPath = String(path || "/");
+    const normalizedPath = normalizeAppPath(rawPath);
+    const queryMatch = rawPath.match(/\?[^#]*/);
+    const nextUrl = `${normalizedPath}${queryMatch ? queryMatch[0] : ""}`;
+
+    if (typeof window !== "undefined") {
+      const currentUrl = `${normalizeAppPath(window.location.pathname)}${window.location.search || ""}`;
+      if (currentUrl !== nextUrl) {
+        const method = replace ? "replaceState" : "pushState";
+        window.history[method]({}, "", nextUrl);
+      }
+    }
+
+    setRoutePath(normalizedPath);
+  };
+
+  const showGridPage = () => {
+    setShowCategoryPage(false);
+    setSelectedProductPage(null);
+    setConfiguratorProductPage(null);
+  };
+
+  const findRouteProduct = (productModel) => {
+    const key = String(productModel || "").trim();
+    return products.find((product) => String(product.model || "").trim() === key)
+      || products.find((product) => !String(product.model || "").trim() && String(product.id) === key);
+  };
+
+  const openCategoryLandingPage = () => {
+    navigateToAppPath(CATEGORY_LANDING_PATH);
+    setShowCategoryPage(true);
+    setSelectedProductPage(null);
+    setConfiguratorProductPage(null);
+    scrollToPageTop();
+  };
+
+  const returnToCategoryGridPage = () => {
+    navigateToAppPath(CATEGORY_GRID_PATH);
+    showGridPage();
+    scrollToPageTop();
+  };
+
+  const openCategoryGridPage = () => {
+    navigateToAppPath(CATEGORY_GRID_PATH);
+    showGridPage();
+    clearFilters();
+    scrollToPageTop();
+  };
+
+  const applyGridStateFromUrl = (search = getCurrentAppSearch()) => {
+    const nextGridState = readGridUrlState(search);
+    setActiveFilters(nextGridState.activeFilters);
+    setStoreTodayOnly(nextGridState.storeTodayOnly);
+    setFreeDeliveryOnly(nextGridState.freeDeliveryOnly);
+    setSearchQuery(nextGridState.searchQuery);
+    setSort(nextGridState.sort);
+  };
+
+  const openCategoryGridPageWithFilter = (label) => {
+    const categoryOptions = Array.from(new Set(products.map((product) => product?.category).filter(Boolean)));
+    const { activeFilters: nextFilters, searchQuery: nextSearchQuery } = getCategoryFilterForLink(label, categoryOptions);
+    const nextGridState = { activeFilters: nextFilters, storeTodayOnly: false, freeDeliveryOnly: false, searchQuery: nextSearchQuery, sort: DEFAULT_GRID_SORT };
+    navigateToAppPath(getGridRoutePathFromState(nextGridState));
+    showGridPage();
+    setActiveFilters(nextFilters);
+    setStoreTodayOnly(false);
+    setFreeDeliveryOnly(false);
+    setSearchQuery(nextSearchQuery);
+    setSort(DEFAULT_GRID_SORT);
+    scrollToPageTop();
+  };
+
+  const openCategoryLandingLink = (url) => {
+    const destination = String(url || "").trim();
+    if (!destination) {
+      openCategoryGridPage();
+      return;
+    }
+
+    if (/^https?:\/\//i.test(destination)) {
+      if (typeof window !== "undefined") window.location.assign(destination);
+      return;
+    }
+
+    if (destination.startsWith("/")) {
+      navigateToAppPath(destination);
+      scrollToPageTop();
+      return;
+    }
+
+    openCategoryGridPage();
+  };
+
+  const openConfiguratorPage = (product) => {
+    if (!product) return;
+    navigateToAppPath(getConfiguratorRoutePath(product));
+    setShowCategoryPage(false);
+    setSelectedProductPage(null);
+    setConfiguratorProductPage(product);
+    scrollToPageTop();
   };
 
   const restoreLayoutUiSnapshot = (snapshot = layoutUiSnapshot) => {
@@ -3095,7 +3833,7 @@ export default function App() {
     setLayoutHistory([]);
     setSaveStatus("");
     setLayoutLiveMessage("Rearrange mode started. Search, filters, and sorting are paused while you reorder the full product grid.");
-    setActiveFilters({ category: "", brand: "", lift: "", shopType: "", included: "", features: "", event: "" });
+    setActiveFilters(createEmptyActiveFilters());
     setStoreTodayOnly(false);
     setFreeDeliveryOnly(false);
     setSearchQuery("");
@@ -3269,13 +4007,13 @@ export default function App() {
   }, [products]);
 
   const filteredProducts = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    const matches = (value, filter) => !filter || String(value || "").toLowerCase() === String(filter).toLowerCase();
-    const includesText = (value, filter) => !filter || String(value || "").toLowerCase().includes(String(filter).toLowerCase());
+    const q = searchQuery.trim();
+    const matches = (value, filter) => !filter || normalizeSearchText(value) === normalizeSearchText(filter);
+    const includesText = (value, filter) => !filter || searchTextMatches(value, filter);
 
     const result = products.filter((p) => {
-      const haystack = [p.name, p.brand, p.category, p.light, p.model, p.lift, p.badge].join(" ").toLowerCase();
-      if (q && !haystack.includes(q)) return false;
+      const haystack = [p.name, p.brand, p.category, p.light, p.model, p.lift, p.badge, p.features, p.feature, p.included, p.promo, p.shopType, p.description].flat().join(" ");
+      if (q && !searchTextMatches(haystack, q)) return false;
       if (!matches(p.category, activeFilters.category)) return false;
       if (!matches(p.brand, activeFilters.brand)) return false;
       if (!matches(p.lift, activeFilters.lift)) return false;
@@ -3297,10 +4035,87 @@ export default function App() {
     return sorted;
   }, [products, searchQuery, sort, activeFilters, storeTodayOnly, freeDeliveryOnly]);
 
-  const openProductPage = (product) => { setSelectedProductPage(product); if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const openProductPage = (product) => {
+    if (!product) return;
+    navigateToAppPath(getProductRoutePath(product));
+    setShowCategoryPage(false);
+    setSelectedProductPage(product);
+    setConfiguratorProductPage(null);
+    scrollToPageTop();
+  };
+
+  useEffect(() => {
+    if (layoutEditMode || normalizeAppPath(routePath) !== CATEGORY_GRID_PATH) return;
+    navigateToAppPath(getGridRoutePathFromState({ activeFilters, storeTodayOnly, freeDeliveryOnly, searchQuery, sort }), { replace: true });
+  }, [activeFilters, storeTodayOnly, freeDeliveryOnly, searchQuery, sort, routePath, layoutEditMode]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const nextPath = getCurrentAppPath();
+      setRoutePath(nextPath);
+      if (nextPath === CATEGORY_GRID_PATH) applyGridStateFromUrl(getCurrentAppSearch());
+    };
+    if (typeof window !== "undefined") window.addEventListener("popstate", handlePopState);
+    return () => {
+      if (typeof window !== "undefined") window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
+
+  useEffect(() => {
+    const route = parseAppRoute(routePath);
+
+    if (route.replacePath) {
+      navigateToAppPath(route.replacePath, { replace: true });
+      return;
+    }
+
+    if (route.type === "category") {
+      setShowCategoryPage(true);
+      setSelectedProductPage(null);
+      setConfiguratorProductPage(null);
+      return;
+    }
+
+    if (route.type === "grid") {
+      applyGridStateFromUrl(getCurrentAppSearch());
+      showGridPage();
+      return;
+    }
+
+    let routeProduct = findRouteProduct(route.productModel);
+    const activeRouteProduct = route.type === "configurator" ? configuratorProductPage : selectedProductPage;
+
+    if (!routeProduct && activeRouteProduct) {
+      routeProduct = products.find((product) => String(product.id) === String(activeRouteProduct.id));
+    }
+
+    if (!routeProduct) {
+      if (products.length) {
+        navigateToAppPath(CATEGORY_GRID_PATH, { replace: true });
+        showGridPage();
+      }
+      return;
+    }
+
+    const currentRouteKey = String(route.productModel || "").trim();
+    const latestRouteKey = getProductRouteKey(routeProduct);
+    if (latestRouteKey && latestRouteKey !== currentRouteKey) {
+      navigateToAppPath(route.type === "configurator" ? getConfiguratorRoutePath(routeProduct) : getProductRoutePath(routeProduct), { replace: true });
+    }
+
+    setShowCategoryPage(false);
+    if (route.type === "configurator") {
+      setSelectedProductPage(null);
+      setConfiguratorProductPage(routeProduct);
+    } else {
+      setSelectedProductPage(routeProduct);
+      setConfiguratorProductPage(null);
+    }
+  }, [routePath, products, selectedProductPage, configuratorProductPage]);
+
   const selectedProduct = selectedProductPage ? (products.find((p) => String(p.id) === String(selectedProductPage.id)) || selectedProductPage) : null;
   const configuratorProduct = configuratorProductPage ? (products.find((p) => String(p.id) === String(configuratorProductPage.id)) || configuratorProductPage) : null;
-
+  const categoryPageSettings = mergeCategoryPageSettings(mockupSettings.categoryPage);
   useEffect(() => {
     if (!selectedProductPage) return;
     const latest = products.find((p) => p.id === selectedProductPage.id);
@@ -3328,16 +4143,18 @@ export default function App() {
     <div className="hd-root">
       <style>{CSS}</style>
       <Header searchQuery={searchQuery} setSearchQuery={setSearchQuery} openEditor={() => setEditorOpen(true)} compareCount={compare.size} />
-      <main className={selectedProduct || configuratorProduct ? "page" : "page category-screenshot-page"}>
+      <main className={selectedProduct || configuratorProduct ? "page" : showCategoryPage ? "page hd-category-landing-shell" : "page category-screenshot-page"}>
         {configuratorProduct ? (
           <ProductConfigurator
             product={configuratorProduct}
             configuratorSchema={getProductConfiguratorSchema(configuratorProduct)}
-            onBack={() => { setConfiguratorProductPage(null); setSelectedProductPage(null); }}
-            onReturnToPdp={() => { setSelectedProductPage(configuratorProduct); setConfiguratorProductPage(null); }}
+            onBack={returnToCategoryGridPage}
+            onReturnToPdp={() => openProductPage(configuratorProduct)}
           />
-        ) : selectedProduct ? <ProductDetailPage product={selectedProduct} onBack={() => setSelectedProductPage(null)} onCustomize={() => setConfiguratorProductPage(selectedProduct)} /> : <>
-          <div className="hd-cat-breadcrumb"><button type="button" onClick={clearFilters}>Home</button><span>/</span><span>Window Treatments</span></div>
+        ) : selectedProduct ? <ProductDetailPage product={selectedProduct} onBack={returnToCategoryGridPage} onCustomize={() => openConfiguratorPage(selectedProduct)} /> : showCategoryPage ? (
+          <CategoryLandingPage products={products} onShopGrid={openCategoryGridPage} onCategoryLink={openCategoryLandingLink} onNavigateCategoryFilter={openCategoryGridPageWithFilter} categoryPageSettings={categoryPageSettings} />
+        ) : <>
+          <div className="hd-cat-breadcrumb"><button type="button" className="pdp-shot-back-button hd-cat-page-button" onClick={openCategoryLandingPage}><ArrowLeft size={14} /> Category Page</button><span>/</span><button type="button" onClick={clearFilters}>Home</button><span>/</span><span>Window Treatments</span></div>
           <section className="hd-cat-title-block hd-cat-title-grid">
             <div>
               <h1>WINDOW TREATMENTS</h1>
@@ -3394,7 +4211,7 @@ export default function App() {
           </section>
         </>}
       </main>
-      {editorOpen && <EditorPanel products={products} displayProducts={configuratorProduct ? [configuratorProduct] : selectedProduct ? [selectedProduct] : filteredProducts} editorMode={configuratorProduct ? "configurator" : selectedProduct ? "product" : "grid"} setProducts={setProducts} onClose={() => setEditorOpen(false)} saveProducts={saveProducts} saveStatus={saveStatus} reloadProducts={loadProducts} placeholderNonBordered={placeholderNonBordered} setPlaceholderNonBordered={setPlaceholderNonBordered} />}
+      {editorOpen && <EditorPanel products={products} displayProducts={configuratorProduct ? [configuratorProduct] : selectedProduct ? [selectedProduct] : filteredProducts} editorMode={configuratorProduct ? "configurator" : selectedProduct ? "product" : showCategoryPage ? "category" : "grid"} setProducts={setProducts} onClose={() => setEditorOpen(false)} saveProducts={saveProducts} saveStatus={saveStatus} reloadProducts={loadProducts} placeholderNonBordered={placeholderNonBordered} setPlaceholderNonBordered={setPlaceholderNonBordered} mockupSettings={mockupSettings} setMockupSettings={setMockupSettings} />}
       {quickView && <QuickViewModal product={quickView} onClose={() => setQuickView(null)} />}
     </div>
   );
@@ -3742,6 +4559,8 @@ button { cursor: pointer; }
 .category-screenshot-page { max-width: 1226px; margin: 0 auto; padding: 10px 0 40px; }
 .hd-cat-breadcrumb { height: 43px; display: flex; align-items: center; gap: 8px; font-size: 14px; color: #555; }
 .hd-cat-breadcrumb button { border: 0; background: transparent; padding: 0; color: #555; text-decoration: underline; }
+.hd-cat-breadcrumb .hd-cat-page-button { color: #f96302; display: inline-flex; align-items: center; gap: 4px; font-weight: 800; text-decoration: none; }
+.hd-cat-breadcrumb .hd-cat-page-button:hover { text-decoration: underline; }
 .hd-cat-breadcrumb span:last-child { text-decoration: underline; }
 .hd-cat-title-block { padding-top: 34px; }
 .hd-cat-title-block h1 { margin: 0; font-size: 44px; line-height: 1; letter-spacing: .6px; font-weight: 900; color: #111; }
@@ -3753,8 +4572,8 @@ button { cursor: pointer; }
 .hd-filter-select span { white-space: nowrap; }
 .hd-filter-select select { position: absolute; inset: 0; opacity: 0; cursor: pointer; min-width: 100%; }
 .hd-filter-select svg { color: #111; }
-.hd-cat-chip-sort-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
-.hd-cat-chips { display: flex; align-items: center; gap: 11px; flex-wrap: wrap; }
+.hd-cat-chip-sort-row { display: flex; align-items: center; justify-content: space-between; gap: 22px; }
+.hd-cat-chips { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .hd-fast-chip { height: 40px; border: 1px solid #bbb; background: #fff; border-radius: 6px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; color: #111; }
 .hd-fast-chip.active { border-color: #f96302; box-shadow: inset 0 0 0 1px #f96302; }
 .hd-hover-chip { height: 40px; border: 1px solid #d0d0d0; background: #fff; border-radius: 6px; padding: 0 10px; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: #333; }
@@ -4839,7 +5658,7 @@ button { cursor: pointer; }
   display: grid;
   gap: 6px;
   color: #6e6e73;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 900;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -6044,7 +6863,7 @@ button { cursor: pointer; }
 }
 .editor-reference-mode-copy span {
   color: #6e6e73;
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.35;
   font-weight: 750;
 }
@@ -6698,7 +7517,7 @@ button { cursor: pointer; }
 }
 .hd-config-fit-icon {
   color: #f96302;
-  font-size: 26px;
+  font-size: 34px;
   line-height: 1;
   transform: rotate(-10deg);
 }
@@ -7178,7 +7997,7 @@ button { cursor: pointer; }
   border-radius: 0;
   padding: 0 10px;
   color: #333;
-  font-size: 13px;
+  font-size: 16px;
 }
 .hdc-window-name small {
   color: #666;
@@ -7474,8 +8293,8 @@ button { cursor: pointer; }
 .hdc-preview-summary p {
   margin: 0 0 2px;
   color: #333;
-  font-size: 12px;
-  line-height: 1.25;
+  font-size: 14px;
+  line-height: 1.28;
 }
 .hdc-preview-summary a { color: #126b93; }
 .hdc-side-price {
@@ -12477,5 +13296,777 @@ button { cursor: pointer; }
   font-weight: 700 !important;
   letter-spacing: 0 !important;
 }
+
+
+/* Category landing page */
+.hd-category-landing-shell {
+  --cat-page-width: 1400px;
+  --cat-page-padding: 12px 0 72px;
+  --cat-breadcrumb-height: 28px;
+
+  --sponsored-height: 150px;
+  --sponsored-arrow-width: 45px;
+  --sponsored-logo-width: 330px;
+  --sponsored-message-width: 330px;
+  --sponsored-shop-width: minmax(0, 1fr);
+  --sponsored-image-width: calc(var(--sponsored-height) * 1.5151515);
+  --sponsored-grid: var(--sponsored-arrow-width) var(--sponsored-logo-width) var(--sponsored-message-width) var(--sponsored-shop-width) var(--sponsored-image-width);
+  --sponsored-brand-padding: var(--sponsored-brand-pad-top) 12px 18px var(--sponsored-brand-pad-left);
+  --sponsored-brand-pad-top: 30px;
+  --sponsored-brand-pad-left: 48px;
+  --sponsored-label-size: 12px;
+  --sponsored-logo-size: 83px;
+  --sponsored-logo-mark-size: 50px;
+  --sponsored-logo-gap: 10px;
+  --sponsored-headline-size: 25px;
+  --sponsored-headline-offset-x: 0px;
+  --sponsored-headline-offset-y: 0px;
+  --sponsored-shop-size: 18px;
+  --sponsored-shop-margin-left: 145px;
+  --sponsored-shop-offset-y: 0px;
+  --sponsored-shop-scale: 1;
+  --sponsored-shop-padding: 0 26px 10px;
+
+  --cat-left-rail-width: 195px;
+  --cat-main-gap: 35px;
+  --cat-title-margin: 21px 0 28px;
+  --cat-title-size: 42px;
+  --cat-nav-gap: 20px;
+  --cat-nav-section-gap: 20px;
+  --cat-nav-heading-size: 16px;
+  --cat-nav-link-size: 15px;
+
+  --side-ad-width: 195px;
+  --side-ad-strip-height: 30px;
+  --side-ad-height: 740px;
+  --side-ad-top-margin: 18px;
+  --side-ad-image-height: calc(var(--side-ad-width) / .85);
+  --side-ad-label-top: 22px;
+  --side-ad-logo-size: 45px;
+  --side-ad-logo-mark-size: 24px;
+  --side-ad-headline-margin: 28px auto 30px;
+  --side-ad-headline-width: 150px;
+  --side-ad-headline-size: 25px;
+  --side-ad-cta-height: 56px;
+  --side-ad-cta-size: 15px;
+
+  --cat-main-top-offset: 90px;
+  --hero-height: 400px;
+  --hero-copy-width: 562px;
+  --hero-image-width: minmax(0, 1fr);
+  --hero-copy-padding: 124px 30px 36px;
+  --hero-kicker-size: 13px;
+  --hero-title-size: 33px;
+  --hero-body-size: 16px;
+  --hero-button-height: 44px;
+  --hero-button-padding: 0 26px;
+  --hero-button-size: 15px;
+
+  --module-top-gap: 125px;
+  --module-heading-bottom-gap: 25px;
+  --module-heading-size: 38px;
+  --feature-grid-gap: 24px;
+  --feature-card-padding: 12px 12px 13px;
+  --feature-card-min-height: 390px;
+  --feature-image-height: 185px;
+  --feature-title-size: 20px;
+  --feature-copy-size: 15px;
+  --feature-copy-min-height: 85px;
+  --feature-button-height: 40px;
+  --feature-button-size: 14px;
+  --tile-grid-gap: 15px;
+  --tile-min-height: 210px;
+  --tile-padding: 10px;
+  --tile-image-height: 115px;
+  --tile-title-size: 15px;
+
+  max-width: var(--cat-page-width);
+  margin: 0 auto;
+  padding: var(--cat-page-padding);
+  background: transparent;
+}
+.hd-category-landing-page { color: #1f1f1f; }
+.hd-category-landing-breadcrumb {
+  height: var(--cat-breadcrumb-height);
+  border-bottom: 1px solid #d5d5d5;
+  margin-bottom: 0;
+  align-items: flex-start;
+  padding-top: 0;
+}
+.hd-category-sponsored-banner {
+  width: 100%;
+  height: var(--sponsored-height);
+  display: grid;
+  grid-template-columns: var(--sponsored-grid);
+  align-items: stretch;
+  background: #fff;
+  border: 1px solid #d5d5d5;
+  overflow: hidden;
+}
+.hd-sponsored-arrow {
+  width: var(--sponsored-arrow-width);
+  border: 0;
+  background: #f96302;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(180deg);
+}
+.hd-sponsored-brand-block {
+  padding: var(--sponsored-brand-padding);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.hd-sponsored-brand-block span {
+  font-size: var(--sponsored-label-size);
+  font-weight: 700;
+  color: #111;
+  margin-bottom: 5px;
+}
+.hd-sponsored-brand-block strong {
+  display: flex;
+  align-items: center;
+  gap: var(--sponsored-logo-gap);
+  color: #0b514c;
+  font-size: var(--sponsored-logo-size);
+  line-height: .78;
+  letter-spacing: -4px;
+  font-weight: 900;
+}
+.hd-veneta-mark {
+  width: var(--sponsored-logo-mark-size);
+  height: var(--sponsored-logo-mark-size);
+  border-radius: 50% 50% 50% 0;
+  background: #0b514c;
+  color: #0b514c !important;
+  display: inline-block;
+  overflow: hidden;
+  transform: rotate(-42deg);
+  margin: 0 !important;
+}
+.hd-sponsored-veneta-brand-block {
+  padding-top: 28px;
+  padding-left: 52px;
+  padding-right: 0;
+  padding-bottom: 0;
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+.hd-sponsored-veneta-brand-block span {
+  margin-bottom: 9px;
+  color: #111;
+  font-size: 11px;
+  font-weight: 700;
+}
+.hd-veneta-logo-frame {
+  width: 250px;
+  max-width: calc(var(--sponsored-logo-width) - 34px);
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+.hd-veneta-logo {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: left center;
+}
+.hd-veneta-logo-placeholder {
+  width: 100%;
+  height: 100%;
+  border: 1px dashed #b8b8b8;
+  background: #f7f7f7;
+  color: #777;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+.hd-sponsored-veneta-message {
+  height: var(--sponsored-height);
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+  transform: translate(var(--sponsored-headline-offset-x), var(--sponsored-headline-offset-y));
+  line-height: .96;
+  white-space: normal;
+  text-transform: uppercase;
+}
+.hd-sponsored-message {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+  transform: translate(var(--sponsored-headline-offset-x), var(--sponsored-headline-offset-y));
+  font-size: var(--sponsored-headline-size);
+  font-weight: 900;
+  color: #000;
+  letter-spacing: -.55px;
+  white-space: nowrap;
+}
+.hd-sponsored-shop {
+  justify-self: start;
+  align-self: center;
+  margin-left: var(--sponsored-shop-margin-left);
+  transform: translateY(var(--sponsored-shop-offset-y)) scale(var(--sponsored-shop-scale));
+  transform-origin: center;
+  border: 0;
+  border-bottom: 1px solid #111;
+  background: transparent;
+  color: #111;
+  font-size: var(--sponsored-shop-size);
+  line-height: 1.2;
+  padding: var(--sponsored-shop-padding);
+}
+.hd-sponsored-veneta-message {
+  height: var(--sponsored-height);
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+  transform: translate(var(--sponsored-headline-offset-x), var(--sponsored-headline-offset-y));
+  line-height: .96;
+  white-space: normal;
+  text-transform: uppercase;
+}
+.hd-sponsored-image { height: var(--sponsored-height); background: #eee; align-self: stretch; }
+.hd-sponsored-image .hd-category-image-placeholder {
+  min-height: var(--sponsored-height);
+}
+.hd-sponsored-veneta-banner .hd-sponsored-image img {
+  object-position: center top;
+}
+.hd-sponsored-image img,
+.hd-category-side-ad-image img,
+.hd-category-hero-image img,
+.hd-category-feature-image img,
+.hd-category-small-tile img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.hd-category-landing-layout {
+  display: grid;
+  grid-template-columns: var(--cat-left-rail-width) minmax(0, 1fr);
+  gap: var(--cat-main-gap);
+  align-items: start;
+}
+.hd-category-left-rail { min-width: 0; }
+.hd-category-landing-title {
+  margin: var(--cat-title-margin);
+  color: #111;
+  font-size: var(--cat-title-size);
+  line-height: .9;
+  letter-spacing: .2px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.hd-category-side-nav { padding-top: 0; }
+.hd-category-nav-section {
+  display: grid;
+  gap: var(--cat-nav-gap);
+  margin-bottom: var(--cat-nav-section-gap);
+}
+.hd-category-nav-section h2 {
+  margin: 0 0 -1px;
+  font-size: var(--cat-nav-heading-size);
+  line-height: 1.1;
+  color: #111;
+  font-weight: 900;
+}
+.hd-category-nav-section button {
+  width: fit-content;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #606060;
+  font-size: var(--cat-nav-link-size);
+  line-height: 1.3;
+  text-align: left;
+}
+.hd-category-nav-section button:hover { color: #111; text-decoration: underline; }
+.hd-category-side-ad {
+  width: 100%;
+  max-width: var(--side-ad-width);
+  height: var(--side-ad-height);
+  margin-top: var(--side-ad-top-margin);
+  border: 1px solid #d4d4d4;
+  background: #fff;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: hidden;
+  isolation: isolate;
+}
+.hd-category-side-ad-strip {
+  flex: 0 0 var(--side-ad-strip-height);
+  height: var(--side-ad-strip-height);
+  background: #f96302;
+}
+.hd-category-side-ad-image {
+  width: 100%;
+  height: var(--side-ad-image-height);
+  background: #eee;
+  overflow: hidden;
+  position: relative;
+  flex: 0 0 var(--side-ad-image-height);
+}
+.hd-category-side-ad > span {
+  margin-top: var(--side-ad-label-top);
+  color: #111;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+.hd-category-side-ad strong {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  margin-top: 24px;
+  color: #0b514c;
+  font-size: var(--side-ad-logo-size);
+  line-height: .78;
+  letter-spacing: -2px;
+  font-weight: 900;
+}
+.hd-mini-veneta-mark {
+  width: var(--side-ad-logo-mark-size);
+  height: var(--side-ad-logo-mark-size);
+  border-radius: 50% 50% 50% 0;
+  background: #0b514c;
+  color: #0b514c !important;
+  display: inline-block;
+  overflow: hidden;
+  transform: rotate(-42deg);
+}
+.hd-side-logo-frame {
+  width: calc(var(--side-ad-width) - 34px);
+  height: 58px;
+  margin: 24px auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.hd-side-logo-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+.hd-category-side-ad h2 {
+  margin: auto auto;
+  max-width: calc(var(--side-ad-width) - 34px);
+  color: #000;
+  font-size: var(--side-ad-headline-size);
+  line-height: .95;
+  font-weight: 900;
+  letter-spacing: -.2px;
+  text-align: center;
+  text-transform: uppercase;
+}
+.hd-category-side-ad button {
+  position: relative;
+  margin: 0 16px 18px;
+  border: 0;
+  background: transparent;
+  min-height: var(--side-ad-cta-height);
+  color: #111;
+  font-size: var(--side-ad-cta-size);
+  line-height: 1;
+}
+.hd-category-side-ad button::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6px;
+  height: 1px;
+  background: #111;
+}
+.hd-category-landing-main { min-width: 0; padding-top: var(--cat-main-top-offset); position: relative; z-index: 1; }
+.hd-category-hero-promo {
+  position: relative;
+  height: var(--hero-height);
+  display: grid;
+  grid-template-columns: var(--hero-copy-width) var(--hero-image-width);
+  overflow: visible;
+  border: 1px solid #cfcfcf;
+  background: #fff;
+  margin-bottom: 38px;
+}
+.hd-category-hero-promo::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 118px;
+  bottom: -22px;
+  height: 4px;
+  background: #d6d6d6;
+}
+.hd-category-hero-promo::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -22px;
+  width: 286px;
+  height: 5px;
+  background: #222;
+  z-index: 1;
+}
+.hd-category-hero-copy { padding: var(--hero-copy-padding); }
+.hd-category-hero-copy h2 {
+  margin: 0 0 12px;
+  color: #333;
+  font-size: var(--hero-title-size);
+  line-height: 1;
+  letter-spacing: -.7px;
+  font-weight: 900;
+}
+.hd-category-hero-kicker {
+  margin: 0 0 8px;
+  color: #777;
+  font-size: var(--hero-kicker-size);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .35px;
+}
+.hd-category-hero-copy p:not(.hd-category-hero-kicker) {
+  margin: 0 0 16px;
+  color: #333;
+  font-size: var(--hero-body-size);
+  line-height: 1.35;
+}
+.hd-category-hero-copy button,
+.hd-category-feature-card button {
+  border: 0;
+  border-radius: 4px;
+  background: #f96302;
+  color: #fff;
+  min-height: var(--hero-button-height);
+  padding: var(--hero-button-padding);
+  font-size: var(--hero-button-size);
+  font-weight: 800;
+}
+.hd-category-hero-image { height: var(--hero-height); min-height: 0; background: #efe7d8; }
+.hd-sponsored-image,
+.hd-category-hero-image,
+.hd-category-feature-image,
+.hd-category-small-tile div,
+.hd-category-small-tile .hd-category-image-action {
+  overflow: hidden;
+  position: relative;
+}
+.hd-category-carousel-control,
+.hd-category-small-carousel {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #111;
+  font-size: 16px;
+}
+.hd-category-carousel-control {
+  position: absolute;
+  right: 0;
+  bottom: -33px;
+  min-width: 96px;
+  justify-content: flex-end;
+}
+.hd-category-carousel-control .hd-category-prev,
+.hd-category-small-carousel .hd-category-prev { opacity: .25; transform: rotate(180deg); }
+.hd-category-module { margin-top: var(--module-top-gap); }
+.hd-category-module-heading-row h2 {
+  margin: 0 0 var(--module-heading-bottom-gap);
+  color: #333;
+  font-size: var(--module-heading-size);
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -.2px;
+}
+.hd-category-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--feature-grid-gap);
+}
+.hd-category-feature-card {
+  border: 1px solid #d5d5d5;
+  background: #fff;
+  padding: var(--feature-card-padding);
+  min-height: var(--feature-card-min-height);
+}
+.hd-category-feature-image { height: var(--feature-image-height); background: #eee; margin-bottom: 14px; }
+.hd-category-feature-card h3 {
+  margin: 0 0 7px;
+  color: #333;
+  font-size: var(--feature-title-size);
+  line-height: 1.08;
+  font-weight: 900;
+}
+.hd-category-feature-card p {
+  margin: 0 0 13px;
+  color: #444;
+  font-size: var(--feature-copy-size);
+  line-height: 1.35;
+  min-height: var(--feature-copy-min-height);
+}
+.hd-category-feature-card button {
+  width: 100%;
+  min-height: var(--feature-button-height);
+  border: 1px solid #f96302;
+  background: #fff;
+  color: #f96302;
+  font-size: var(--feature-button-size);
+}
+.hd-category-image-action {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.hd-category-feature-card .hd-category-image-action {
+  min-height: 0;
+  border: 0;
+  color: inherit;
+}
+.hd-category-image-action:hover img,
+.hd-category-image-action:focus-visible img {
+  transform: scale(1.035);
+}
+.hd-category-image-action img {
+  transition: transform .18s ease;
+}
+.hd-category-small-carousel { float: right; margin-top: 8px; }
+.hd-category-strip-grid {
+  clear: both;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--tile-grid-gap);
+}
+.hd-category-small-tile {
+  border: 1px solid #d5d5d5;
+  background: #fff;
+  min-height: var(--tile-min-height);
+  padding: var(--tile-padding);
+}
+.hd-category-small-tile div,
+.hd-category-small-tile .hd-category-image-action { height: var(--tile-image-height); background: #eee; margin-bottom: 9px; }
+.hd-category-small-tile h3 {
+  margin: 0;
+  color: #333;
+  font-size: var(--tile-title-size);
+  line-height: 1.15;
+  font-weight: 900;
+}
+.hd-category-image-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f1f1;
+  color: #777;
+  font-size: 12px;
+  font-weight: 800;
+}
+@media (max-width: 980px) {
+  .hd-category-landing-shell { padding: 10px 14px 44px; }
+  .hd-category-sponsored-banner { grid-template-columns: 36px 190px 1fr; }
+  .hd-sponsored-shop, .hd-sponsored-image { display: none; }
+  .hd-sponsored-message { justify-content: flex-start; font-size: 18px; }
+  .hd-category-landing-layout { grid-template-columns: 1fr; }
+  .hd-category-landing-main { padding-top: 0; }
+  .hd-category-side-nav { display: flex; gap: 22px; overflow-x: auto; padding-bottom: 6px; }
+  .hd-category-nav-section { min-width: 140px; }
+  .hd-category-side-ad { display: none; }
+  .hd-category-feature-grid { grid-template-columns: 1fr; }
+  .hd-category-strip-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 680px) {
+  .hd-category-sponsored-banner { grid-template-columns: 36px 1fr; }
+  .hd-sponsored-message { display: none; }
+  .hd-category-landing-title { font-size: 30px; }
+  .hd-category-hero-promo { height: auto; grid-template-columns: 1fr; }
+  .hd-category-hero-copy { padding: 24px 18px; }
+  .hd-category-hero-image { height: 230px; }
+  .hd-category-strip-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Category page editor */
+.category-editor-panel {
+  width: min(1040px, calc(100vw - 28px)) !important;
+  max-height: calc(100vh - 28px);
+  background: #f5f5f7 !important;
+}
+.category-editor-workspace {
+  padding: 24px 32px 38px;
+}
+.category-editor-controls {
+  display: grid;
+  gap: 18px;
+  width: min(920px, 100%);
+  margin: 0 auto;
+}
+.category-editor-card {
+  display: block !important;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,.08) !important;
+  border-radius: 22px !important;
+  background: rgba(255,255,255,.94) !important;
+  box-shadow: 0 18px 45px rgba(0,0,0,.06) !important;
+}
+.category-editor-section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-end;
+  padding: 20px 22px 17px;
+  background: linear-gradient(180deg, #fff 0%, #fafafa 100%);
+  border-bottom: 1px solid #ececec;
+}
+.category-editor-section-head span {
+  color: #f96302;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .72px;
+  text-transform: uppercase;
+}
+.category-editor-section-head strong {
+  color: #111;
+  font-size: 23px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -.35px;
+}
+.category-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 22px;
+}
+.category-editor-field,
+.category-editor-image-field label {
+  display: grid;
+  gap: 7px;
+}
+.category-editor-field span,
+.category-editor-image-field label span {
+  color: #444;
+  font-size: 12px;
+  font-weight: 800;
+}
+.category-editor-field input,
+.category-editor-field textarea,
+.category-editor-image-field input {
+  width: 100%;
+  border: 1px solid #d7d7d7;
+  border-radius: 12px;
+  background: #fff;
+  color: #222;
+  padding: 11px 12px;
+  font-size: 13px;
+  line-height: 1.35;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.category-editor-field input[readonly] {
+  background: #f7f7f7;
+  color: #666;
+  cursor: default;
+}
+.category-editor-field input:focus,
+.category-editor-field textarea:focus,
+.category-editor-image-field input:focus {
+  border-color: #f96302;
+  box-shadow: 0 0 0 3px rgba(249, 99, 2, .14);
+}
+.category-editor-image-field {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  border: 1px solid #ececec;
+  border-radius: 16px;
+  background: #fbfbfb;
+  padding: 14px;
+}
+.category-editor-image-row {
+  display: grid;
+  grid-template-columns: 156px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+.category-editor-image-preview {
+  height: 98px;
+  border: 1px solid #dcdcdc;
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #777;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+.category-editor-image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #fff;
+}
+.category-editor-image-field small {
+  color: #777;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.category-editor-image-field .editor-upload-pill-button {
+  width: fit-content;
+  min-height: 36px;
+  justify-self: start;
+}
+@media (max-width: 760px) {
+  .category-editor-panel {
+    width: 100% !important;
+    max-height: 100vh;
+  }
+  .category-editor-workspace {
+    padding: 16px !important;
+  }
+  .category-editor-grid {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+  .category-editor-section-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .category-editor-image-row {
+    grid-template-columns: 1fr;
+  }
+  .category-editor-image-preview {
+    height: 130px;
+  }
+}
+
 
 `;
