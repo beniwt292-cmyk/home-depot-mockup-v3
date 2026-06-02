@@ -2986,9 +2986,8 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
                   <span>Banner presets</span>
                   <strong>Save / Load / Delete</strong>
                 </div>
-
-                <div className="banner-preset-toolbar">
-                  <label className="editor-field category-editor-field">
+                <div className="category-editor-grid banner-preset-grid">
+                  <label className="editor-field category-editor-field banner-preset-name-field">
                     <span>Preset name</span>
                     <input
                       type="text"
@@ -2996,74 +2995,78 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
                       onChange={(e) => setNewPresetName(e.target.value)}
                       placeholder="e.g. Memorial Day 2026"
                     />
+                    <small className="banner-preset-helper">{bannerPresetStatus || "Save the current top, side, and hero banners as a named preset."}</small>
                   </label>
-                  <button
-                    type="button"
-                    className="save-action"
-                    onClick={async () => {
-                      if (!saveBannerPreset) return;
-                      const ok = await saveBannerPreset(newPresetName);
-                      if (ok) setNewPresetName("");
-                    }}
-                  >
-                    <Save size={14} /> Save Preset
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-action"
-                    onClick={() => reloadBannerPresets && reloadBannerPresets()}
-                  >
-                    <RotateCcw size={14} /> Refresh
-                  </button>
+
+                  <div className="banner-preset-toolbar-actions">
+                    <button
+                      type="button"
+                      className="save-action"
+                      onClick={async () => {
+                        if (!saveBannerPreset) return;
+                        const ok = await saveBannerPreset(newPresetName);
+                        if (ok) setNewPresetName("");
+                      }}
+                    >
+                      <Save size={14} /> Save Preset
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={() => reloadBannerPresets && reloadBannerPresets()}
+                    >
+                      <RotateCcw size={14} /> Refresh
+                    </button>
+                  </div>
+
+                  <div className="banner-preset-list-wrap">
+                    {bannerPresets.length === 0 ? (
+                      <div className="banner-preset-empty">No saved presets yet. Enter a name and click Save Preset to capture the current banners.</div>
+                    ) : (
+                      <ul className="banner-preset-list">
+                        {bannerPresets.map((preset) => (
+                          <li key={preset.id} className="banner-preset-row">
+                            <div className="banner-preset-meta">
+                              <div className="banner-preset-name">{preset.name}</div>
+                              {preset.updatedAt && (
+                                <div className="banner-preset-time">Updated {new Date(preset.updatedAt).toLocaleString()}</div>
+                              )}
+                            </div>
+                            <div className="banner-preset-actions">
+                              <button
+                                type="button"
+                                className="save-action"
+                                onClick={() => loadBannerPreset && loadBannerPreset(preset.id)}
+                              >
+                                <Upload size={13} /> Load
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary-action"
+                                onClick={() => {
+                                  if (typeof window === "undefined") return;
+                                  const next = window.prompt("Rename preset:", preset.name);
+                                  if (next && next.trim() && next.trim() !== preset.name && renameBannerPreset) {
+                                    renameBannerPreset(preset.id, next.trim());
+                                  }
+                                }}
+                              >
+                                <Pencil size={13} /> Rename
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary-action banner-preset-delete"
+                                onClick={() => deleteBannerPreset && deleteBannerPreset(preset.id)}
+                              >
+                                <Trash2 size={13} /> Delete
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
-
-                <div className="banner-preset-status">{bannerPresetStatus || "Save the current top, side, and hero banners as a named preset."}</div>
-
-                {bannerPresets.length === 0 ? (
-                  <div className="banner-preset-empty">No saved presets yet. Enter a name and click Save Preset to capture the current banners.</div>
-                ) : (
-                  <ul className="banner-preset-list">
-                    {bannerPresets.map((preset) => (
-                      <li key={preset.id} className="banner-preset-row">
-                        <div className="banner-preset-meta">
-                          <div className="banner-preset-name">{preset.name}</div>
-                          {preset.updatedAt && (
-                            <div className="banner-preset-time">Updated {new Date(preset.updatedAt).toLocaleString()}</div>
-                          )}
-                        </div>
-                        <div className="banner-preset-actions">
-                          <button
-                            type="button"
-                            className="save-action"
-                            onClick={() => loadBannerPreset && loadBannerPreset(preset.id)}
-                          >
-                            <Upload size={13} /> Load
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-action"
-                            onClick={() => {
-                              if (typeof window === "undefined") return;
-                              const next = window.prompt("Rename preset:", preset.name);
-                              if (next && next.trim() && next.trim() !== preset.name && renameBannerPreset) {
-                                renameBannerPreset(preset.id, next.trim());
-                              }
-                            }}
-                          >
-                            <Pencil size={13} /> Rename
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-action banner-preset-delete"
-                            onClick={() => deleteBannerPreset && deleteBannerPreset(preset.id)}
-                          >
-                            <Trash2 size={13} /> Delete
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
               </section>
             </div>
           </div>
@@ -3716,8 +3719,17 @@ export default function App() {
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload.error || `Save failed (${res.status})`);
+      // Optimistically merge returned preset so the list updates immediately,
+      // even if the GET refetch is slow due to Blobs eventual consistency.
+      if (payload && payload.preset && payload.preset.id) {
+        setBannerPresets((prev) => {
+          const next = prev.filter((p) => p.id !== payload.preset.id);
+          return [payload.preset, ...next];
+        });
+      }
       setBannerPresetStatus(`Saved "${cleanName}"`);
-      await loadBannerPresets();
+      // Refetch shortly after to reconcile with server state.
+      setTimeout(() => { loadBannerPresets(); }, 400);
       return true;
     } catch (error) {
       console.error(error);
@@ -14256,23 +14268,32 @@ button { cursor: pointer; }
 
 
 /* Banner presets section (matches editor card / category-editor language) */
-.banner-preset-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 10px;
+.banner-preset-grid {
+  grid-template-columns: minmax(0, 1fr) auto !important;
   align-items: end;
-  padding: 18px 22px 6px;
 }
-.banner-preset-toolbar .category-editor-field { margin: 0; }
-.banner-preset-status {
-  padding: 0 22px 14px;
+.banner-preset-name-field { grid-column: 1 / 2; }
+.banner-preset-toolbar-actions {
+  grid-column: 2 / 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: end;
+  padding-bottom: 2px;
+}
+.banner-preset-helper {
+  display: block;
+  margin-top: 6px;
   color: #6e6e73;
-  font-size: 12.5px;
-  font-weight: 600;
-  min-height: 18px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -.01em;
+}
+.banner-preset-list-wrap {
+  grid-column: 1 / -1;
+  margin-top: 4px;
 }
 .banner-preset-empty {
-  margin: 4px 22px 22px;
   padding: 22px;
   text-align: center;
   color: #6e6e73;
@@ -14284,7 +14305,7 @@ button { cursor: pointer; }
 .banner-preset-list {
   list-style: none;
   margin: 0;
-  padding: 4px 22px 22px;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -14326,7 +14347,9 @@ button { cursor: pointer; }
   gap: 6px;
 }
 .banner-preset-actions .secondary-action,
-.banner-preset-actions .save-action {
+.banner-preset-actions .save-action,
+.banner-preset-toolbar-actions .secondary-action,
+.banner-preset-toolbar-actions .save-action {
   min-height: 32px !important;
   padding: 0 12px !important;
   font-size: 12px !important;
@@ -14335,13 +14358,9 @@ button { cursor: pointer; }
 .banner-preset-delete { color: #b42318 !important; }
 .banner-preset-delete:hover { background: #fdecec !important; border-color: rgba(180,35,24,.25) !important; }
 @media (max-width: 720px) {
-  .banner-preset-toolbar {
-    grid-template-columns: 1fr;
-  }
-  .banner-preset-row {
-    grid-template-columns: 1fr;
-    align-items: flex-start;
-  }
+  .banner-preset-grid { grid-template-columns: 1fr !important; }
+  .banner-preset-toolbar-actions { grid-column: 1 / -1; flex-wrap: wrap; padding-bottom: 0; }
+  .banner-preset-row { grid-template-columns: 1fr; align-items: flex-start; }
   .banner-preset-actions { flex-wrap: wrap; }
 }
 
