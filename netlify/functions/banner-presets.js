@@ -42,7 +42,8 @@ async function localList() {
       if (!file.endsWith(".json")) continue;
       try {
         const raw = await fs.readFile(path.join(LOCAL_DIR, file), "utf8");
-        presets.push(JSON.parse(raw));
+        const data = JSON.parse(raw);
+        if (data && data.id) presets.push(data);
       } catch {}
     }
     return presets;
@@ -73,13 +74,22 @@ async function localDelete(id) {
 
 async function listPresets(store) {
   if (!store) return localList();
-  const { blobs } = await store.list();
   const presets = [];
-  for (const blob of blobs || []) {
-    try {
-      const data = await store.get(blob.key, { type: "json" });
-      if (data) presets.push(data);
-    } catch {}
+  try {
+    const result = await store.list();
+    const blobs = (result && (result.blobs || result)) || [];
+    for (const blob of blobs) {
+      const key = blob.key || blob;
+      if (!key) continue;
+      try {
+        const data = await store.get(key, { type: "json" });
+        if (data && data.id) presets.push(data);
+      } catch (err) {
+        console.warn("Skipping unreadable preset blob", key, err?.message);
+      }
+    }
+  } catch (err) {
+    console.error("Could not list banner presets", err);
   }
   return presets;
 }
@@ -108,7 +118,7 @@ export const handler = async (event) => {
     if (event.httpMethod === "GET") {
       const presets = await listPresets(store);
       presets.sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
-      return json(200, { presets });
+      return json(200, { presets, storage: store ? "netlify-blobs" : "local-dev-file" });
     }
 
     if (event.httpMethod === "POST") {
@@ -125,7 +135,7 @@ export const handler = async (event) => {
         updatedAt: now
       };
       await setPreset(store, id, record);
-      return json(200, { preset: record });
+      return json(200, { preset: record, storage: store ? "netlify-blobs" : "local-dev-file" });
     }
 
     if (event.httpMethod === "PUT") {
@@ -145,11 +155,11 @@ export const handler = async (event) => {
     }
 
     if (event.httpMethod === "DELETE") {
-      const params = new URLSearchParams(event.rawQuery || event.queryStringParameters || "");
       let id = "";
       if (event.queryStringParameters && event.queryStringParameters.id) {
         id = safeId(event.queryStringParameters.id);
       } else {
+        const params = new URLSearchParams(event.rawQuery || "");
         id = safeId(params.get("id"));
       }
       if (!id) return json(400, { error: "Preset id is required." });
