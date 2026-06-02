@@ -2982,16 +2982,21 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
               </section>
 
               <section className="editor-card apple-editor-card editor-card-expanded category-editor-card">
-                <div className="category-editor-section-head"><span>Banner presets</span><strong>Save / Load / Delete</strong></div>
-                <p style={{margin: "6px 0 12px", color: "#555", fontSize: 13}}>Save the current top, side, and hero banner content as a named preset. Load a preset to replace the current banners. Deletes are permanent.</p>
-                <div style={{display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap"}}>
-                  <input
-                    type="text"
-                    value={newPresetName}
-                    onChange={(e) => setNewPresetName(e.target.value)}
-                    placeholder="Preset name (e.g. Memorial Day 2026)"
-                    style={{flex: "1 1 240px", padding: "8px 10px", border: "1px solid #ccc", borderRadius: 6, fontSize: 14}}
-                  />
+                <div className="category-editor-section-head">
+                  <span>Banner presets</span>
+                  <strong>Save / Load / Delete</strong>
+                </div>
+
+                <div className="banner-preset-toolbar">
+                  <label className="editor-field category-editor-field">
+                    <span>Preset name</span>
+                    <input
+                      type="text"
+                      value={newPresetName}
+                      onChange={(e) => setNewPresetName(e.target.value)}
+                      placeholder="e.g. Memorial Day 2026"
+                    />
+                  </label>
                   <button
                     type="button"
                     className="save-action"
@@ -3001,47 +3006,60 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
                       if (ok) setNewPresetName("");
                     }}
                   >
-                    <Save size={16} /> Save Preset
+                    <Save size={14} /> Save Preset
                   </button>
-                  <button type="button" className="secondary-action" onClick={() => reloadBannerPresets && reloadBannerPresets()}>
-                    <RotateCcw size={16} /> Refresh
+                  <button
+                    type="button"
+                    className="secondary-action"
+                    onClick={() => reloadBannerPresets && reloadBannerPresets()}
+                  >
+                    <RotateCcw size={14} /> Refresh
                   </button>
-                  {bannerPresetStatus && <span className="save-status" style={{marginLeft: 4}}>{bannerPresetStatus}</span>}
                 </div>
 
+                <div className="banner-preset-status">{bannerPresetStatus || "Save the current top, side, and hero banners as a named preset."}</div>
+
                 {bannerPresets.length === 0 ? (
-                  <div style={{padding: 12, background: "#f7f7f7", borderRadius: 6, color: "#666", fontSize: 13}}>
-                    No saved presets yet. Enter a name and click Save Preset to capture the current banners.
-                  </div>
+                  <div className="banner-preset-empty">No saved presets yet. Enter a name and click Save Preset to capture the current banners.</div>
                 ) : (
-                  <ul style={{listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8}}>
+                  <ul className="banner-preset-list">
                     {bannerPresets.map((preset) => (
-                      <li key={preset.id} style={{display: "flex", gap: 8, alignItems: "center", padding: "8px 10px", border: "1px solid #e0e0e0", borderRadius: 6, background: "#fff", flexWrap: "wrap"}}>
-                        <div style={{flex: "1 1 200px", minWidth: 0}}>
-                          <div style={{fontWeight: 600, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"}}>{preset.name}</div>
+                      <li key={preset.id} className="banner-preset-row">
+                        <div className="banner-preset-meta">
+                          <div className="banner-preset-name">{preset.name}</div>
                           {preset.updatedAt && (
-                            <div style={{fontSize: 11, color: "#888"}}>Updated {new Date(preset.updatedAt).toLocaleString()}</div>
+                            <div className="banner-preset-time">Updated {new Date(preset.updatedAt).toLocaleString()}</div>
                           )}
                         </div>
-                        <button type="button" className="save-action" onClick={() => loadBannerPreset && loadBannerPreset(preset.id)}>
-                          <Upload size={14} /> Load
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary-action"
-                          onClick={() => {
-                            if (typeof window === "undefined") return;
-                            const next = window.prompt("Rename preset:", preset.name);
-                            if (next && next.trim() && next.trim() !== preset.name && renameBannerPreset) {
-                              renameBannerPreset(preset.id, next.trim());
-                            }
-                          }}
-                        >
-                          <Pencil size={14} /> Rename
-                        </button>
-                        <button type="button" className="secondary-action" onClick={() => deleteBannerPreset && deleteBannerPreset(preset.id)} style={{color: "#b00"}}>
-                          <Trash2 size={14} /> Delete
-                        </button>
+                        <div className="banner-preset-actions">
+                          <button
+                            type="button"
+                            className="save-action"
+                            onClick={() => loadBannerPreset && loadBannerPreset(preset.id)}
+                          >
+                            <Upload size={13} /> Load
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-action"
+                            onClick={() => {
+                              if (typeof window === "undefined") return;
+                              const next = window.prompt("Rename preset:", preset.name);
+                              if (next && next.trim() && next.trim() !== preset.name && renameBannerPreset) {
+                                renameBannerPreset(preset.id, next.trim());
+                              }
+                            }}
+                          >
+                            <Pencil size={13} /> Rename
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-action banner-preset-delete"
+                            onClick={() => deleteBannerPreset && deleteBannerPreset(preset.id)}
+                          >
+                            <Trash2 size={13} /> Delete
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -14235,5 +14253,96 @@ button { cursor: pointer; }
   }
 }
 
+
+
+/* Banner presets section (matches editor card / category-editor language) */
+.banner-preset-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+  padding: 18px 22px 6px;
+}
+.banner-preset-toolbar .category-editor-field { margin: 0; }
+.banner-preset-status {
+  padding: 0 22px 14px;
+  color: #6e6e73;
+  font-size: 12.5px;
+  font-weight: 600;
+  min-height: 18px;
+}
+.banner-preset-empty {
+  margin: 4px 22px 22px;
+  padding: 22px;
+  text-align: center;
+  color: #6e6e73;
+  background: #fafafa;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 14px;
+  font-size: 13px;
+}
+.banner-preset-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 22px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.banner-preset-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 14px;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.banner-preset-row:hover {
+  border-color: rgba(0,0,0,.14);
+  box-shadow: 0 6px 18px rgba(0,0,0,.05);
+}
+.banner-preset-meta { min-width: 0; }
+.banner-preset-name {
+  color: #1d1d1f;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.banner-preset-time {
+  margin-top: 2px;
+  color: #86868b;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.banner-preset-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.banner-preset-actions .secondary-action,
+.banner-preset-actions .save-action {
+  min-height: 32px !important;
+  padding: 0 12px !important;
+  font-size: 12px !important;
+  border-radius: 999px !important;
+}
+.banner-preset-delete { color: #b42318 !important; }
+.banner-preset-delete:hover { background: #fdecec !important; border-color: rgba(180,35,24,.25) !important; }
+@media (max-width: 720px) {
+  .banner-preset-toolbar {
+    grid-template-columns: 1fr;
+  }
+  .banner-preset-row {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+  .banner-preset-actions { flex-wrap: wrap; }
+}
 
 `;
