@@ -2128,6 +2128,14 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
               colorName={selectedColor?.title || ""}
               wallPaint={selectedPaint?.hex || ""}
               reverseRoll={config["custom_fabric-roll-direction"] === "Reverse Roll"}
+              mount={config.mount}
+              width={sizeToInches(config.width, config.widthFraction)}
+              height={sizeToInches(config.height, config.heightFraction)}
+              lift={config.lift}
+              controlSide={config["custom_control-side"]}
+              chainType={config["custom_chain-type"]}
+              topTreatment={config["custom_top-treatment"]}
+              lightGuard={Boolean(config["custom_light-guard"])}
             />
             <div className="hdc-phone">Need help? <strong>800-921-2119</strong></div>
           </section>
@@ -2138,14 +2146,57 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
 }
 
 
-function PreviewScene({ isRoller, colorSwatch, wallPaint, reverseRoll, lowered, setLowered, large = false }) {
-  const windowRef = useRef(null);
+function sizeToInches(whole, fraction) {
+  const base = parseFloat(whole) || 0;
+  const [num, den] = String(fraction || "0/0").split("/").map(Number);
+  return base + (den ? num / den : 0);
+}
+
+function liftStyle(lift) {
+  const key = String(lift || "").toLowerCase();
+  if (!key) return "none";
+  if (key.includes("wand")) return "wand";
+  if (key.includes("motor")) return "motor";
+  if (key.includes("cordless")) return "cordless";
+  if (key.includes("chain") || key.includes("cord loop")) return "chain";
+  return "none";
+}
+
+function topTreatmentStyle(value) {
+  const key = String(value || "").toLowerCase();
+  if (key.includes("curved")) return "curved";
+  if (key.includes("square")) return "square";
+  if (key.includes("valance")) return "valance";
+  return "";
+}
+
+function PreviewScene({ isRoller, colorSwatch, wallPaint, reverseRoll, lowered, setLowered, mount, width, height, lift, controlSide, chainType, topTreatment, lightGuard, large = false }) {
+  const stageRef = useRef(null);
+  const assemblyRef = useRef(null);
   const dragging = useRef(false);
+  const [stageSize, setStageSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const node = stageRef.current;
+    if (!node) return undefined;
+    const measure = () => setStageSize({ w: node.clientWidth, h: node.clientHeight });
+    measure();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  // Window shape follows the entered width and height (kept within readable limits).
+  const ratio = width > 0 && height > 0 ? Math.min(2.4, Math.max(0.4, width / height)) : 0.78;
+  const boxW = Math.max(160, (stageSize.w || 360) * (large ? 0.78 : 0.72) - 40);
+  const boxH = Math.max(160, (stageSize.h || 470) - (large ? 110 : 100));
+  const winW = Math.round(ratio > boxW / boxH ? boxW : boxH * ratio);
+  const winH = Math.round(ratio > boxW / boxH ? boxW / ratio : boxH);
+
   const setFromPointer = (event) => {
-    const rect = windowRef.current?.getBoundingClientRect();
+    const rect = assemblyRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const ratio = (event.clientY - rect.top) / rect.height;
-    setLowered(Math.min(1, Math.max(0.08, ratio)));
+    setLowered(Math.min(1, Math.max(0.08, (event.clientY - rect.top) / rect.height)));
   };
   const onPointerDown = (event) => {
     dragging.current = true;
@@ -2158,13 +2209,22 @@ function PreviewScene({ isRoller, colorSwatch, wallPaint, reverseRoll, lowered, 
     if (event.key === "ArrowUp") { event.preventDefault(); setLowered((v) => Math.max(0.08, v - 0.1)); }
     if (event.key === "ArrowDown") { event.preventDefault(); setLowered((v) => Math.min(1, v + 0.1)); }
   };
+
   const fabric = colorSwatch || "#e7e7e2";
-  const pleatCount = Math.max(3, Math.round(lowered * 22));
+  const pleatCount = Math.max(3, Math.round(lowered * (winH / 17)));
+  const isOutside = mount === "Outside Mount";
+  const control = liftStyle(lift);
+  const side = controlSide === "Left" ? "left" : "right";
+  const top = topTreatmentStyle(topTreatment);
+  const steel = String(chainType || "").toLowerCase().includes("steel");
+  const mountClass = isOutside ? "is-outside" : "is-inside";
+
   return (
-    <div className={`hdc-preview-stage${large ? " is-large" : ""}${wallPaint ? " has-wall-paint" : ""}`} style={wallPaint ? { "--hdc-wall-paint": wallPaint } : undefined}>
+    <div ref={stageRef} className={`hdc-preview-stage${large ? " is-large" : ""}${wallPaint ? " has-wall-paint" : ""}`} style={wallPaint ? { "--hdc-wall-paint": wallPaint } : undefined}>
       <div
-        ref={windowRef}
-        className={`hdc-window-large${isRoller ? " is-roller" : ""}`}
+        ref={assemblyRef}
+        className={`hdc-window-assembly ${mountClass}`}
+        style={{ width: winW, height: winH, "--hdc-fabric": fabric }}
         role="slider"
         tabIndex={0}
         aria-label="Drag up or down to raise or lower the shade"
@@ -2177,30 +2237,44 @@ function PreviewScene({ isRoller, colorSwatch, wallPaint, reverseRoll, lowered, 
         onPointerCancel={onPointerUp}
         onKeyDown={onKeyDown}
       >
-        <div className="hdc-outdoor-view"><i /><i /></div>
-        {isRoller ? (
-          <>
-            <div className={`hdc-roller-tube${reverseRoll ? " is-reverse" : ""}`} style={{ "--hdc-fabric": fabric }} />
-            <div className={`hdc-shade-large is-roller${reverseRoll ? " is-reverse" : ""}`} style={{ height: `${lowered * 100}%`, "--hdc-fabric": fabric }}>
-              <span className="hdc-hem-bar" />
-            </div>
-          </>
-        ) : (
-          <div className="hdc-shade-large is-cellular" style={{ height: `${lowered * 100}%`, "--hdc-fabric": fabric }}>
-            {Array.from({ length: pleatCount }).map((_, index) => <span key={index} />)}
-          </div>
-        )}
+        <div className="hdc-window-large">
+          <div className="hdc-outdoor-view"><i /><i /></div>
+        </div>
+        <div className={`hdc-shade-zone ${mountClass}`}>
+          {lightGuard ? <><span className="hdc-light-guard is-left" /><span className="hdc-light-guard is-right" /></> : null}
+          {isRoller ? (
+            <>
+              <div className={`hdc-roller-tube${reverseRoll ? " is-reverse" : ""}`} />
+              <div className={`hdc-shade-large is-roller${reverseRoll ? " is-reverse" : ""}`} style={{ height: `calc(${lowered * 100}% - 8px)` }}>
+                <span className="hdc-hem-bar">{control === "cordless" ? <i className="hdc-pull-handle" /> : null}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="hdc-headrail" />
+              <div className="hdc-shade-large is-cellular" style={{ height: `calc(${lowered * 100}% - 10px)` }}>
+                {Array.from({ length: pleatCount }).map((_, index) => <span key={index} />)}
+                {control === "cordless" ? <i className="hdc-pull-handle is-cellular" /> : null}
+              </div>
+            </>
+          )}
+          {top ? <div className={`hdc-top-treatment is-${top}`} /> : null}
+          {control === "chain" ? <div className={`hdc-chain is-${side}${steel ? " is-steel" : ""}`} /> : null}
+          {control === "wand" ? <div className={`hdc-wand is-${side}`} /> : null}
+        </div>
+        {control === "motor" ? <div className={`hdc-motor-badge is-${side}`} aria-hidden="true">Motorized</div> : null}
         <div className="hdc-drag-text" aria-hidden="true"><span>&#8597;</span> Drag Image</div>
       </div>
+      {width > 0 && height > 0 ? <div className="hdc-size-tag" aria-hidden="true">{+width.toFixed(3)}" W &times; {+height.toFixed(3)}" H</div> : null}
     </div>
   );
 }
 
-function EnhancedProductPreview({ isRoller, colorSwatch, colorName, wallPaint, reverseRoll }) {
+function EnhancedProductPreview({ colorName, ...options }) {
   const [lowered, setLowered] = useState(0.7);
   const [zoomed, setZoomed] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const sceneProps = { isRoller, colorSwatch, wallPaint, reverseRoll, lowered, setLowered };
+  const sceneProps = { ...options, lowered, setLowered };
   return (
     <>
       <div className="hdc-preview-title"><span>New</span> Enhanced Product Preview</div>
@@ -14678,21 +14752,45 @@ button { cursor: pointer; }
 .hdc-preview-stage.is-large { height: min(72vh, 680px); }
 .hdc-zoom { position: absolute; top: 10px; right: 10px; z-index: 3; height: 32px; padding: 0 12px; border: 2px solid #f96302; border-radius: 4px; background: #fff; color: #f96302; font-size: 12px; font-weight: 700; cursor: pointer; }
 .hdc-zoom:hover { background: #fff4ec; }
-.hdc-window-large { position: relative; width: min(286px, 62%); height: min(370px, calc(100% - 60px)); border: 8px solid #c6c6c6; background: #fff; box-shadow: 0 3px 10px rgba(0,0,0,.22); overflow: hidden; cursor: ns-resize; touch-action: none; user-select: none; }
-.is-large .hdc-window-large { width: min(440px, 80%); height: calc(100% - 70px); }
-.hdc-window-large:focus-visible { outline: 3px solid rgba(249,99,2,.5); outline-offset: 3px; }
 .hdc-outdoor-view { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; }
 .hdc-outdoor-view i { border-right: 4px solid #c6c6c6; background: radial-gradient(ellipse at 50% 92%, #9cc78d 0 22%, transparent 23%), linear-gradient(180deg, #eaf4ff 0%, #f8fbff 55%, #dcebd9 100%); }
 .hdc-outdoor-view i:last-child { border-right: 0; }
-.hdc-shade-large { position: absolute; top: 0; left: 0; right: 0; z-index: 1; transition: height .12s ease-out; }
-.hdc-shade-large.is-cellular { display: flex; flex-direction: column; justify-content: flex-end; background: var(--hdc-fabric); border-bottom: 5px solid rgba(0,0,0,.28); overflow: hidden; }
+.hdc-window-assembly { position: relative; flex: 0 0 auto; cursor: ns-resize; touch-action: none; user-select: none; transition: width .2s ease, height .2s ease; }
+.hdc-window-assembly:focus-visible { outline: 3px solid rgba(249,99,2,.5); outline-offset: 14px; }
+.hdc-window-large { position: absolute; inset: 0; border: 8px solid #c6c6c6; background: #fff; box-shadow: 0 3px 10px rgba(0,0,0,.22); overflow: hidden; }
+.hdc-shade-zone { position: absolute; z-index: 1; }
+.hdc-shade-zone.is-inside { top: 8px; bottom: 8px; left: calc(8px + 2%); right: calc(8px + 2%); }
+.hdc-shade-zone.is-outside { top: -18px; bottom: 0; left: -14px; right: -14px; }
+.hdc-shade-large { position: absolute; left: 0; right: 0; z-index: 1; transition: height .12s ease-out; }
+.hdc-shade-large.is-cellular { top: 10px; display: flex; flex-direction: column; justify-content: flex-end; background: var(--hdc-fabric); border-bottom: 5px solid rgba(0,0,0,.28); }
 .hdc-shade-large.is-cellular span { flex: 0 0 auto; height: 14px; background: linear-gradient(180deg, rgba(255,255,255,.45), rgba(0,0,0,.18) 60%, rgba(255,255,255,.25)), var(--hdc-fabric); border-bottom: 1px solid rgba(0,0,0,.16); }
-.hdc-roller-tube { position: absolute; top: 0; left: 0; right: 0; z-index: 2; height: 16px; background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(0,0,0,.25)), var(--hdc-fabric); box-shadow: 0 2px 3px rgba(0,0,0,.25); }
+.hdc-headrail { position: absolute; top: 0; left: 0; right: 0; z-index: 2; height: 12px; border-radius: 2px; background: linear-gradient(180deg, #fafafa, #c9c9c9); box-shadow: 0 2px 3px rgba(0,0,0,.25); }
+.hdc-roller-tube { position: absolute; top: 0; left: 0; right: 0; z-index: 2; height: 16px; border-radius: 8px; background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(0,0,0,.25)), var(--hdc-fabric); box-shadow: 0 2px 3px rgba(0,0,0,.25); }
 .hdc-roller-tube.is-reverse { box-shadow: 0 2px 3px rgba(0,0,0,.25), inset 0 -3px 0 rgba(0,0,0,.18); }
-.hdc-shade-large.is-roller { top: 8px; left: 4%; right: 4%; background: linear-gradient(90deg, rgba(0,0,0,.06), rgba(255,255,255,.08) 50%, rgba(0,0,0,.06)), var(--hdc-fabric); box-shadow: 0 1px 4px rgba(0,0,0,.18); }
-.hdc-shade-large.is-roller.is-reverse { left: 2%; right: 2%; z-index: 3; }
+.hdc-shade-large.is-roller { top: 8px; left: 3%; right: 3%; background: linear-gradient(90deg, rgba(0,0,0,.06), rgba(255,255,255,.08) 50%, rgba(0,0,0,.06)), var(--hdc-fabric); box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+.hdc-shade-large.is-roller.is-reverse { left: 1%; right: 1%; z-index: 3; }
 .hdc-hem-bar { position: absolute; left: -2px; right: -2px; bottom: -6px; height: 8px; border-radius: 2px; background: linear-gradient(180deg, #e6e6e6, #9a9a9a); box-shadow: 0 1px 2px rgba(0,0,0,.3); }
-.hdc-drag-text { position: absolute; left: 50%; bottom: 10px; z-index: 4; transform: translateX(-50%); padding: 3px 10px; border-radius: 12px; background: rgba(0,0,0,.45); color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; pointer-events: none; }
+.hdc-pull-handle { position: absolute; left: 50%; bottom: -7px; width: 34px; height: 7px; transform: translateX(-50%); border-radius: 0 0 6px 6px; background: #8d8d8d; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.hdc-pull-handle.is-cellular { bottom: -12px; }
+.hdc-top-treatment { position: absolute; top: -4px; left: -3px; right: -3px; z-index: 5; height: 26px; box-shadow: 0 3px 5px rgba(0,0,0,.25); }
+.hdc-top-treatment.is-curved { border-radius: 4px 4px 14px 14px; background: linear-gradient(180deg, rgba(255,255,255,.35), rgba(0,0,0,.2)), var(--hdc-fabric); border-left: 5px solid #bdbdbd; border-right: 5px solid #bdbdbd; }
+.hdc-top-treatment.is-square { border-radius: 2px; background: linear-gradient(180deg, #f4f4f4, #b9bcbf 55%, #d9dbdd); }
+.hdc-top-treatment.is-valance { height: 30px; border-radius: 2px; background: repeating-linear-gradient(90deg, rgba(0,0,0,.05) 0 2px, transparent 2px 6px), linear-gradient(180deg, rgba(255,255,255,.25), rgba(0,0,0,.15)), var(--hdc-fabric); }
+.hdc-light-guard { position: absolute; top: 0; bottom: 0; z-index: 4; width: 5px; background: linear-gradient(90deg, #9da1a5, #e3e5e7, #9da1a5); }
+.hdc-light-guard.is-left { left: 0; }
+.hdc-light-guard.is-right { right: 0; }
+.hdc-chain { position: absolute; top: 12px; z-index: 6; width: 9px; height: 62%; border-radius: 0 0 5px 5px; border: 2px dotted #f2f2f2; border-top: 0; filter: drop-shadow(0 1px 1px rgba(0,0,0,.45)); }
+.hdc-chain.is-steel { border-color: #9ea4aa; }
+.hdc-chain.is-right { right: 6px; }
+.hdc-chain.is-left { left: 6px; }
+.hdc-wand { position: absolute; top: 12px; z-index: 6; width: 4px; height: 45%; border-radius: 2px; background: linear-gradient(90deg, #d8d8d8, #ffffff, #bdbdbd); box-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.hdc-wand.is-right { right: 10px; }
+.hdc-wand.is-left { left: 10px; }
+.hdc-motor-badge { position: absolute; top: -40px; z-index: 6; padding: 2px 8px; border-radius: 10px; background: #333; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .02em; }
+.hdc-motor-badge.is-right { right: -14px; }
+.hdc-motor-badge.is-left { left: -14px; }
+.hdc-drag-text { position: absolute; left: 50%; bottom: 10px; z-index: 7; transform: translateX(-50%); padding: 3px 10px; border-radius: 12px; background: rgba(0,0,0,.45); color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; pointer-events: none; }
+.hdc-size-tag { position: absolute; left: 10px; bottom: 10px; padding: 2px 8px; border-radius: 3px; background: rgba(255,255,255,.85); color: #333; font-size: 11px; font-weight: 700; }
 .hdc-preview-note { margin: 8px 0 10px; color: #666; font-size: 11px; line-height: 1.35; }
 .hdc-show-preview { display: none; width: 100%; height: 40px; border: 1px solid #f96302; border-radius: 4px; background: #fff; color: #f96302; font-weight: 700; cursor: pointer; }
 .hdc-phone { display: none; }
@@ -14708,7 +14806,6 @@ button { cursor: pointer; }
 }
 @media (max-width: 520px) {
   .hdc-preview-stage { height: 330px; }
-  .hdc-window-large { width: 240px; max-width: 78%; }
 }
 .hdc-paint-pairing { display: grid; gap: 18px; margin-bottom: 18px; }
 .hdc-step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-right: 8px; border-radius: 50%; background: #f96302; color: #fff; font-size: 12px; font-weight: 700; vertical-align: 1px; }
