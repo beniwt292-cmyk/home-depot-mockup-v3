@@ -399,6 +399,8 @@ function mergeConfiguratorSchema(value) {
       // Color options carry swatch data; keep it only when present.
       if (option.swatchColor !== undefined) normalized.swatchColor = String(option.swatchColor ?? "");
       if (option.swatchImageUrl !== undefined) normalized.swatchImageUrl = String(option.swatchImageUrl ?? "");
+      // Optional rule: option is unavailable while another selection matches.
+      if (option.disabledWhen && typeof option.disabledWhen === "object") normalized.disabledWhen = option.disabledWhen;
       return normalized;
     });
   };
@@ -421,7 +423,7 @@ function mergeConfiguratorSchema(value) {
         id,
         key: id,
         title,
-        description: String(section.description || "Custom configurator options."),
+        description: Object.prototype.hasOwnProperty.call(section, "description") ? String(section.description ?? "") : "Custom configurator options.",
         visible: section.visible !== false,
         options: normalizeOptions(section.options, [{ key: "Option 1", title: "Option 1", price: "", adds: "", description: "", note: "" }])
       };
@@ -483,6 +485,84 @@ function migrateDrillFreeMountOptionsOnce(products) {
       drillFreeMountMigrationDone: true
     };
   });
+}
+
+// VENETA roller shades use Home Depot's roller configurator options (colors are kept as-is).
+const ROLLER_CONFIGURATOR_FIELDS = {
+  widthMin: 13,
+  widthMax: 192,
+  heightMin: 12,
+  heightMax: 120,
+  defaults: { lift: "Chain Loop", headrail: "Single Shade" },
+  mountOptions: [
+    { key: "Inside Mount", title: "Inside Mount", price: "", adds: "", description: "Provide exact window opening dimensions. There will be visible light gaps of approximately 1/2 inch on both sides of your roller shade to allow clearance for operating.", note: "" },
+    { key: "Outside Mount", title: "Outside Mount", price: "", adds: "", description: "Provide the exact size of your shade, not the window. Because the fabric is narrower than the roller, so you should add a minimum of 1\u00bd inch to width.", note: "" }
+  ],
+  liftOptions: [
+    { key: "Chain Loop", title: "Chain Loop", price: "", adds: "", description: "Beaded chain is a standard lift choice. The beaded chain pulley system raises and lowers your shade with ease.", note: "" },
+    { key: "Cordless", title: "Cordless", price: "", adds: "Adds $43.01", description: "Cordless shades are a sleek choice, since there are no free hanging cords. To lower, gently pull the shade by the handle to the desired location. To raise, simply push up the hem bar to the desired location. Safer choice for homes with small children.", note: "" },
+    { key: "Cordless Dual Roller Shade", title: "Cordless Dual Roller Shade", price: "", adds: "Adds $139.79", description: "Dual shades give you full control over light and privacy by combining two fabric types into one versatile window treatment. Each shade operates independently.", note: "" },
+    { key: "QuikClick Wand Control Motor", title: "QuikClick Wand Control Motor", price: "", adds: "Adds $134.88", description: "QuikClick Wand Control Motor with rechargeable lithium ion batteries operate your shades with a white detachable wand and can be positioned on either left or right side of shade. One micro USB cable is included with each order.", note: "" },
+    { key: "Motorized", title: "Motorized", price: "", adds: "Adds $470.98", description: "Motorized shades allow you to adjust the height of your shades, controlling the light, with a simple touch of a button, without getting up. Ultimate in convenience for hard to reach shades.", note: "" }
+  ],
+  headrailOptions: [
+    { key: "Single Shade", title: "Single Shade", price: "", adds: "", description: "", note: "" }
+  ],
+  customSections: [
+    { id: "control-side", title: "Control Side", description: "Please select your control side.", showWhen: { field: "lift", values: ["Chain Loop", "QuikClick Wand Control Motor", "Motorized"] },
+      options: [{ key: "Left", title: "Left" }, { key: "Right", title: "Right" }] },
+    { id: "chain-type", title: "Chain Type", description: "", showWhen: { field: "lift", values: ["Chain Loop"] },
+      options: [{ key: "Plastic", title: "Plastic" }, { key: "Stainless Steel", title: "Stainless Steel", adds: "Adds $27.97" }] },
+    { id: "fabric-roll-direction", title: "Fabric Roll Direction", description: "", defaultOption: "Standard Roll",
+      options: [
+        { key: "Standard Roll", title: "Standard Roll", description: "With a standard roll, the fabric hangs toward the back of the window, closer to the glass, for better privacy and light blockage." },
+        { key: "Reverse Roll", title: "Reverse Roll", description: "With a reverse roll, the fabric hangs toward the room, away from the glass. Not available with a valance.", disabledWhen: { field: "custom_top-treatment", values: ["*"], message: "Not available with a valance." } }
+      ] },
+    { id: "valance-type", title: "Valance Type", description: "",
+      options: [{ key: "Single Valance", title: "Single Valance" }, { key: "Extended Size Valance for Single Shade", title: "Extended Size Valance for Single Shade" }, { key: "Common Valance to Cover 2 shades", title: "Common Valance to Cover 2 shades" }] },
+    { id: "top-treatment", title: "Top Treatment", description: "Valances cannot be added later.", optional: true,
+      options: [{ key: "Curved Fascia with Fabric Insert", title: "Curved Fascia with Fabric Insert", adds: "Adds $79.58" }, { key: "Square Aluminum Fascia", title: "Square Aluminum Fascia", adds: "Adds $79.58" }, { key: "Fabric Valance", title: "Fabric Valance", adds: "Adds $79.58" }] },
+    { id: "keystone", title: "Do you need a Keystone?", reviewTitle: "Valance Keystone", description: "",
+      options: [{ key: "No Keystone", title: "No Keystone" }, { key: "Keystone", title: "Keystone", adds: "Adds $58.07" }] },
+    { id: "light-guard", title: "Light Guard", description: "Aluminum Light Guards are a great way to reduce light that could otherwise enter from the side of your shades.", optional: true,
+      options: [{ key: "Yes, I want Light Guard", title: "Yes, I want Light Guard", adds: "Adds $43.87" }] }
+  ]
+};
+
+function isVenetaRollerProduct(product) {
+  const category = String(product?.category || "").toLowerCase();
+  const brand = String(product?.brand || "").toLowerCase();
+  return brand === "veneta" && category.includes("roller");
+}
+
+function migrateRollerConfiguratorOnce(products) {
+  return products.map((product) => {
+    if (product?.rollerConfiguratorMigrationDone || !isVenetaRollerProduct(product)) return product;
+    const current = product?.configurator || product?.configuratorSchema || {};
+    return {
+      ...product,
+      configurator: mergeConfiguratorSchema({
+        ...current,
+        ...ROLLER_CONFIGURATOR_FIELDS,
+        visibleSections: { ...(current.visibleSections || {}), mountOptions: true, liftOptions: true, headrailOptions: true }
+      }),
+      rollerConfiguratorMigrationDone: true
+    };
+  });
+}
+
+// "Adds $43.01" / "+$17.86" -> 43.01
+function parseAddOnPrice(value) {
+  const n = Number(String(value || "").replace(/[^0-9.]/g, ""));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+// Rule check: { field, values } where "*" matches any non-empty selection.
+function ruleMatches(rule, config) {
+  if (!rule || !rule.field) return false;
+  const current = config[rule.field] || "";
+  const values = Array.isArray(rule.values) ? rule.values : [];
+  return values.includes("*") ? Boolean(current) : values.includes(current);
 }
 
 function getRenderableConfiguratorSchema(product, schema) {
@@ -1689,22 +1769,40 @@ function ProductDetailPage({ product, onBack, onCustomize }) {
 
 
 function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchema }) {
-  const [config, setConfig] = useState({
-    windowName: "",
-    mount: "",
-    width: "24",
-    widthFraction: "0/0",
-    height: "36",
-    heightFraction: "0/0",
-    color: "",
-    paint: "",
-    lift: "",
-    headrail: "Standard",
-    quantity: "1"
+  const activeConfiguratorSchema = useMemo(() => getRenderableConfiguratorSchema(product, configuratorSchema), [configuratorSchema, product]);
+  const [config, setConfig] = useState(() => {
+    const defaults = activeConfiguratorSchema.defaults || {};
+    const initial = {
+      windowName: "",
+      mount: "",
+      width: "24",
+      widthFraction: "0/0",
+      height: "36",
+      heightFraction: "0/0",
+      color: "",
+      paint: "",
+      lift: defaults.lift || "",
+      headrail: defaults.headrail || activeConfiguratorSchema.headrailOptions[0]?.key || "Standard",
+      quantity: "1"
+    };
+    (activeConfiguratorSchema.customSections || []).forEach((section) => {
+      if (section.defaultOption) initial[`custom_${section.id}`] = section.defaultOption;
+    });
+    return initial;
   });
 
-  const updateConfig = (field, value) => setConfig((current) => ({ ...current, [field]: value }));
-  const activeConfiguratorSchema = useMemo(() => getRenderableConfiguratorSchema(product, configuratorSchema), [configuratorSchema, product]);
+  // Applies a change, then clears any selection that is now hidden or unavailable
+  // (e.g. picking a valance switches Reverse Roll back to the section default).
+  const updateConfig = (field, value) => setConfig((current) => {
+    const next = { ...current, [field]: value };
+    (activeConfiguratorSchema.customSections || []).forEach((section) => {
+      const key = `custom_${section.id}`;
+      if (section.showWhen && !ruleMatches(section.showWhen, next)) { next[key] = ""; return; }
+      const chosen = section.options?.find((option) => option.key === next[key]);
+      if (chosen?.disabledWhen && ruleMatches(chosen.disabledWhen, next)) next[key] = section.defaultOption || "";
+    });
+    return next;
+  });
   const eighths = activeConfiguratorSchema.eighths;
   const widthMin = Math.min(activeConfiguratorSchema.widthMin, activeConfiguratorSchema.widthMax);
   const widthMax = Math.max(activeConfiguratorSchema.widthMin, activeConfiguratorSchema.widthMax);
@@ -1759,7 +1857,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
     );
   };
   const showHeadrailSection = visibleSections.headrailOptions !== false && headrailOptions.length > 0;
-  const visibleCustomSections = (activeConfiguratorSchema.customSections || []).filter((section) => section.visible !== false && Array.isArray(section.options) && section.options.length);
+  const visibleCustomSections = (activeConfiguratorSchema.customSections || []).filter((section) => section.visible !== false && Array.isArray(section.options) && section.options.length && (!section.showWhen || ruleMatches(section.showWhen, config)));
 
   const productTitle = product.pdpTitle || product.detailTitle || product.name || "Custom Window Treatment";
   const brand = product.brand || "Levolor";
@@ -1767,8 +1865,15 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
   const baseOriginalPrice = Number(product.was || product.pdpWas || product.detailWas || product.configuredWas || (baseSalePrice / 0.6));
   // A color's Add-on Price (e.g. "+$17.86") raises the sale and original price; savings % stays the same.
   const colorUpcharge = selectedColor ? Math.max(0, toPriceNumber(String(selectedColor.adds || "").replace(/[^0-9.]/g, ""), 0)) : 0;
-  const colorPriceRatio = baseSalePrice > 0 ? (baseSalePrice + colorUpcharge) / baseSalePrice : 1;
-  const salePrice = baseSalePrice + colorUpcharge;
+  // Selected mount, lift, headrail, and custom-section add-ons ("Adds $43.01") raise the price the same way.
+  const pickAdds = (options, key) => parseAddOnPrice(options.find((option) => option.key === key)?.adds);
+  const optionUpcharge = (showMountSection ? pickAdds(mountOptions, config.mount) : 0)
+    + (showLiftSection ? pickAdds(liftOptions, config.lift) : 0)
+    + (showHeadrailSection ? pickAdds(headrailOptions, config.headrail) : 0)
+    + visibleCustomSections.reduce((sum, section) => sum + pickAdds(section.options, config[`custom_${section.id}`]), 0);
+  const totalUpcharge = colorUpcharge + optionUpcharge;
+  const colorPriceRatio = baseSalePrice > 0 ? (baseSalePrice + totalUpcharge) / baseSalePrice : 1;
+  const salePrice = baseSalePrice + totalUpcharge;
   const originalPrice = baseOriginalPrice * colorPriceRatio;
   const savingsPct = originalPrice > salePrice ? Math.round(((originalPrice - salePrice) / originalPrice) * 100) : 0;
   const [originalDollars, originalCents] = money(originalPrice);
@@ -1796,8 +1901,8 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
     </div>
   );
 
-  const OptionCard = ({ option, selected, onSelect, media, compact = false }) => (
-    <button type="button" className={selected ? "hdc-option-card selected" : "hdc-option-card"} onClick={onSelect}>
+  const OptionCard = ({ option, selected, onSelect, media, compact = false, disabled = false }) => (
+    <button type="button" className={`hdc-option-card${selected ? " selected" : ""}${disabled ? " is-disabled" : ""}`} onClick={onSelect} disabled={disabled} aria-disabled={disabled}>
       <span className="hdc-radio" />
       {media ? <div className="hdc-option-media">{media}</div> : null}
       <div className="hdc-option-copy">
@@ -1818,7 +1923,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
         <button type="button" onClick={onBack}>Home</button><span>/</span>
         <button type="button" onClick={onBack}>Window Treatments</button><span>/</span>
         <button type="button" onClick={onBack}>Window Shades</button><span>/</span>
-        <span>Cellular Shades</span>
+        <span>{product.category || "Cellular Shades"}</span>
       </nav>
 
       <div className="hdc-layout">
@@ -1847,7 +1952,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
                   option={option}
                   selected={config.mount === option.key}
                   onSelect={() => updateConfig("mount", option.key)}
-                  media={<MiniBlindArt variant={index === 1 ? "nodrill" : index === 2 ? "side" : index === 3 ? "outside" : "inside"} />}
+                  media={<MiniBlindArt variant={(() => { const label = `${option.key} ${option.title}`.toLowerCase(); return label.includes("outside") ? "outside" : label.includes("drill") ? "nodrill" : label.includes("side mount") ? "side" : "inside"; })()} />}
                 />
               ))}
             </div>
@@ -1959,9 +2064,19 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
                 <h2>{section.title}</h2>
                 {section.description ? <p className="hdc-custom-section-description">{section.description}</p> : null}
                 <div className="hdc-option-stack no-media compact">
-                  {section.options.map((option) => (
-                    <OptionCard key={option.key} option={option} selected={config[fieldKey] === option.key} onSelect={() => updateConfig(fieldKey, option.key)} compact />
-                  ))}
+                  {section.options.map((option) => {
+                    const disabled = Boolean(option.disabledWhen && ruleMatches(option.disabledWhen, config));
+                    const selected = config[fieldKey] === option.key;
+                    return (
+                      <OptionCard
+                        key={option.key}
+                        option={option}
+                        selected={selected}
+                        disabled={disabled}
+                        onSelect={() => updateConfig(fieldKey, selected && section.optional ? "" : option.key)}
+                      />
+                    );
+                  })}
                 </div>
               </section>
             );
@@ -1981,7 +2096,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
               {selectedPaint ? <div><span>Paint Pairing:</span><b>{paintPairing.brand} {selectedPaint.name} {selectedPaint.code}</b></div> : null}
               {showLiftSection ? <div><span>Lift:</span><b>{config.lift}</b></div> : null}
               {showHeadrailSection ? <div><span>Headrail:</span><b>{config.headrail}</b></div> : null}
-              {visibleCustomSections.map((section) => <div key={`review-${section.id}`}><span>{section.title}:</span><b>{config[`custom_${section.id}`] || ""}</b></div>)}
+              {visibleCustomSections.map((section) => <div key={`review-${section.id}`}><span>{section.reviewTitle || section.title}:</span><b>{config[`custom_${section.id}`] || ""}</b></div>)}
             </div>
             <div className="hdc-review-ship"><span>Shipping:</span><strong>FREE</strong></div>
             <label className="hdc-qty"><span>Quantity:</span><input type="number" min="1" value={config.quantity} onChange={(e) => updateConfig("quantity", e.target.value)} /></label>
@@ -4034,7 +4149,7 @@ export default function App() {
 
       if (loadedSettings) setMockupSettings(loadedSettings);
 
-      setProducts(migrateDrillFreeMountOptionsOnce(productList));
+      setProducts(migrateRollerConfiguratorOnce(migrateDrillFreeMountOptionsOnce(productList)));
 
       if (!productList.length) {
         setSaveStatus("No products saved to Netlify Blobs yet");
@@ -14912,5 +15027,15 @@ button { cursor: pointer; }
 .hd-root .hd-cat-breadcrumb > :first-child,
 .hd-root .pdp-shot-breadcrumb > :first-child { margin-left: 0 !important; }
 .hd-root .pdp-shot-back-button { flex: 0 0 auto !important; margin: 0 !important; }
+
+/* Configurator: unavailable options */
+.hdc-option-card.is-disabled { opacity: .45; cursor: not-allowed; }
+.hdc-option-card.is-disabled:hover { border-color: inherit; }
+
+/* Configurator: show add-on prices under the option title, like Home Depot ("Adds $43.01") */
+.hd-root .hdc-option-title-row { grid-template-columns: minmax(0, 1fr) !important; gap: 2px !important; }
+.hd-root .hdc-option-price { display: block !important; min-width: 0 !important; text-align: left !important; }
+.hd-root .hdc-option-price b { color: #333 !important; font-size: 13px !important; font-weight: 700 !important; margin-right: 6px; }
+.hd-root .hdc-option-price em { color: #333 !important; font-size: 13px !important; font-style: normal !important; font-weight: 400 !important; }
 
 `;
