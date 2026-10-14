@@ -300,13 +300,20 @@ const DEFAULT_CONFIGURATOR_SCHEMA = {
       note: ""
     }
   ],
+  colorGroupTitle: "Light Filtering Colors",
   colorOptions: [
-    { key: "Snow Drift", title: "Snow Drift", price: "", adds: "", description: "", note: "", swatchColor: "#f4f4f4", swatchImageUrl: "" },
-    { key: "Pearl White", title: "Pearl White", price: "", adds: "", description: "", note: "", swatchColor: "#ffffff", swatchImageUrl: "" },
-    { key: "Linen", title: "Linen", price: "", adds: "", description: "", note: "", swatchColor: "#dfd4c6", swatchImageUrl: "" },
-    { key: "Sand", title: "Sand", price: "", adds: "", description: "", note: "", swatchColor: "#c7b99a", swatchImageUrl: "" },
-    { key: "Gray Mist", title: "Gray Mist", price: "", adds: "", description: "", note: "", swatchColor: "#a9aaa6", swatchImageUrl: "" },
-    { key: "Espresso", title: "Espresso", price: "", adds: "", description: "", note: "", swatchColor: "#453a36", swatchImageUrl: "" }
+    { key: "Estelle Snow F1445", title: "Estelle Snow F1445", price: "", adds: "", description: "", note: "", swatchColor: "#ececea", swatchImageUrl: "" },
+    { key: "Creek Beige F1123", title: "Creek Beige F1123", price: "", adds: "", description: "", note: "", swatchColor: "#d6c3a3", swatchImageUrl: "" },
+    { key: "Estelle Cream F1446", title: "Estelle Cream F1446", price: "", adds: "", description: "", note: "", swatchColor: "#efe8da", swatchImageUrl: "" },
+    { key: "Estelle Stone F1448", title: "Estelle Stone F1448", price: "", adds: "", description: "", note: "", swatchColor: "#a3a3a1", swatchImageUrl: "" },
+    { key: "Estelle Natural F1447", title: "Estelle Natural F1447", price: "", adds: "", description: "", note: "", swatchColor: "#e3cfb0", swatchImageUrl: "" },
+    { key: "Estelle Caviar F1449", title: "Estelle Caviar F1449", price: "", adds: "", description: "", note: "", swatchColor: "#2b2b2b", swatchImageUrl: "" },
+    { key: "Creek Latte F1157", title: "Creek Latte F1157", price: "", adds: "", description: "", note: "", swatchColor: "#d8ccb5", swatchImageUrl: "" },
+    { key: "Creek Egret F1121", title: "Creek Egret F1121", price: "", adds: "", description: "", note: "", swatchColor: "#a99e98", swatchImageUrl: "" },
+    { key: "Creek Smoke F1122", title: "Creek Smoke F1122", price: "", adds: "", description: "", note: "", swatchColor: "#7d7874", swatchImageUrl: "" },
+    { key: "Creek Pewter F1120", title: "Creek Pewter F1120", price: "", adds: "", description: "", note: "", swatchColor: "#a8a7a5", swatchImageUrl: "" },
+    { key: "Luster Goldmine F1436", title: "Luster Goldmine F1436", price: "", adds: "", description: "", note: "", swatchColor: "#a57f66", swatchImageUrl: "" },
+    { key: "Luster Pewter F1439", title: "Luster Pewter F1439", price: "", adds: "", description: "", note: "", swatchColor: "#6f6f6f", swatchImageUrl: "" }
   ],
   liftOptions: [
     {
@@ -414,6 +421,7 @@ function mergeConfiguratorSchema(value) {
     customSections: normalizeCustomSections(merged.customSections),
     eighths: Array.isArray(merged.eighths) && merged.eighths.length ? merged.eighths : DEFAULT_CONFIGURATOR_SCHEMA.eighths,
     mountOptions: normalizeOptions(merged.mountOptions, DEFAULT_CONFIGURATOR_SCHEMA.mountOptions),
+    colorGroupTitle: String(merged.colorGroupTitle ?? DEFAULT_CONFIGURATOR_SCHEMA.colorGroupTitle),
     colorOptions: normalizeOptions(merged.colorOptions, DEFAULT_CONFIGURATOR_SCHEMA.colorOptions),
     liftOptions: normalizeOptions(merged.liftOptions, DEFAULT_CONFIGURATOR_SCHEMA.liftOptions),
     headrailOptions: normalizeOptions(merged.headrailOptions, DEFAULT_CONFIGURATOR_SCHEMA.headrailOptions)
@@ -1799,7 +1807,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
           {showColorSection ? (
           <section className="hdc-section hdc-color-section">
             <h2>Color</h2>
-            <div className="hdc-color-selected">Color: <strong>{selectedColor ? selectedColor.title : "Select a Color"}</strong>{selectedColor && (selectedColor.adds || selectedColor.price) ? <span>{selectedColor.adds || selectedColor.price}</span> : null}</div>
+            {activeConfiguratorSchema.colorGroupTitle ? <h3 className="hdc-color-group-title">{activeConfiguratorSchema.colorGroupTitle}</h3> : null}
             <div className="hdc-color-swatches" role="radiogroup" aria-label="Color">
               {colorOptions.map((option) => {
                 const active = config.color === option.key;
@@ -1817,7 +1825,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
                     <span className="hdc-color-chip" style={{ background: option.swatchColor || "#f4f4f4" }}>
                       {option.swatchImageUrl ? <img src={imgSrc(option.swatchImageUrl)} alt="" /> : null}
                     </span>
-                    <span className="hdc-color-name">{option.title}</span>
+                    <span className="hdc-color-name">{option.title}{option.adds ? <em>{option.adds}</em> : null}</span>
                   </button>
                 );
               })}
@@ -2133,6 +2141,7 @@ function ConfiguratorSettingsEditor({ schema, setSchema, product = null, isEdite
           eighths: DEFAULT_CONFIGURATOR_SCHEMA.eighths
         });
       }
+      if (groupKey === "colorOptions") return mergeConfiguratorSchema({ ...base, colorOptions: DEFAULT_CONFIGURATOR_SCHEMA.colorOptions, colorGroupTitle: DEFAULT_CONFIGURATOR_SCHEMA.colorGroupTitle });
       return mergeConfiguratorSchema({ ...base, [groupKey]: DEFAULT_CONFIGURATOR_SCHEMA[groupKey] });
     });
   };
@@ -2357,6 +2366,11 @@ function ConfiguratorSettingsEditor({ schema, setSchema, product = null, isEdite
               <div className="config-custom-section-fields">
                 <label>Section Name<input value={group.title} onChange={(e) => updateCustomSection(group.customId, "title", e.target.value)} placeholder="Section name" /></label>
                 <label className="wide">Description<input value={group.description} onChange={(e) => updateCustomSection(group.customId, "description", e.target.value)} placeholder="Short helper text" /></label>
+              </div>
+            ) : null}
+            {group.key === "colorOptions" ? (
+              <div className="config-custom-section-fields">
+                <label className="wide">Color Group Heading<input value={safeSchema.colorGroupTitle || ""} onChange={(e) => updateSchemaField("colorGroupTitle", e.target.value)} placeholder="e.g. Light Filtering Colors (leave blank to hide)" /></label>
               </div>
             ) : null}
             <div className="config-section-toolbar">
@@ -14426,20 +14440,20 @@ button { cursor: pointer; }
   .banner-preset-actions { flex-wrap: wrap; }
 }
 
-/* Configurator color selection */
-.hdc-color-selected { font-size: 14px; color: #333; margin: 4px 0 12px; }
-.hdc-color-selected strong { font-weight: 700; }
-.hdc-color-selected span { margin-left: 8px; color: #f96302; font-weight: 700; }
-.hdc-color-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 12px; }
-.hdc-color-swatch { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 4px; background: #fff; border: 1px solid transparent; border-radius: 4px; cursor: pointer; font: inherit; }
-.hdc-color-swatch:hover { border-color: #ccc; }
+/* Configurator color selection (tile grid like homedepot.com) */
+.hdc-color-group-title { font-size: 17px; font-weight: 400; color: #333; margin: 6px 0 18px; }
+.hdc-color-swatches { display: grid; grid-template-columns: repeat(4, 108px); gap: 8px; }
+.hdc-color-swatch { display: flex; flex-direction: column; padding: 0; background: #fff; border: 1px solid #d0d0d0; border-radius: 3px; box-shadow: 0 1px 2px rgba(0,0,0,.15); cursor: pointer; font: inherit; overflow: hidden; text-align: center; }
+.hdc-color-swatch:hover { border-color: #999; }
 .hdc-color-swatch:focus-visible { outline: 2px solid #f96302; outline-offset: 2px; }
-.hdc-color-chip { position: relative; display: block; width: 56px; height: 56px; border-radius: 50%; border: 1px solid #c8c8c8; overflow: hidden; box-shadow: inset 0 0 0 3px #fff; }
-.hdc-color-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.hdc-color-swatch.active .hdc-color-chip { border: 2px solid #f96302; }
-.hdc-color-name { font-size: 12px; line-height: 1.2; color: #333; text-align: center; }
-.hdc-color-swatch.active .hdc-color-name { font-weight: 700; }
+.hdc-color-swatch.active { border: 2px solid #f96302; }
+.hdc-color-chip { position: relative; display: block; width: 100%; height: 106px; overflow: hidden; }
+.hdc-color-chip::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(180deg, rgba(255,255,255,.10) 0 1px, rgba(0,0,0,.06) 1px 2px, transparent 2px 4px); pointer-events: none; }
+.hdc-color-chip img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: cover; display: block; }
+.hdc-color-name { display: flex; flex-direction: column; justify-content: center; min-height: 36px; padding: 5px 6px 6px; font-size: 11px; font-weight: 700; line-height: 1.3; color: #555; }
+.hdc-color-name em { font-style: normal; color: #f96302; }
 .hdc-color-description { margin: 10px 0 0; font-size: 13px; color: #555; }
+@media (max-width: 560px) { .hdc-color-swatches { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .config-swatch-color-field { display: flex; gap: 6px; align-items: center; }
 .config-swatch-color-field input[type="color"] { width: 38px; min-width: 38px; height: 34px; padding: 2px; }
 
