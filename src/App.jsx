@@ -259,7 +259,7 @@ function applyMockupSettingsToProducts(products, settings) {
 
 
 const DEFAULT_CONFIGURATOR_SCHEMA = {
-  visibleSections: { size: true, mountOptions: true, liftOptions: true, headrailOptions: true },
+  visibleSections: { size: true, mountOptions: true, colorOptions: true, liftOptions: true, headrailOptions: true },
   customSections: [],
   eighths: ["Select", "0/0", "1/8", "1/4", "3/8", "1/2", "5/8", "3/4", "7/8"],
   widthMin: 14,
@@ -299,6 +299,14 @@ const DEFAULT_CONFIGURATOR_SCHEMA = {
       description: "Outside mount shades are installed above the window opening (on the trim or drywall). Use with a shallow window opening or on doors. Your product will be made in the exact size you specify.",
       note: ""
     }
+  ],
+  colorOptions: [
+    { key: "Snow Drift", title: "Snow Drift", price: "", adds: "", description: "", note: "", swatchColor: "#f4f4f4", swatchImageUrl: "" },
+    { key: "Pearl White", title: "Pearl White", price: "", adds: "", description: "", note: "", swatchColor: "#ffffff", swatchImageUrl: "" },
+    { key: "Linen", title: "Linen", price: "", adds: "", description: "", note: "", swatchColor: "#dfd4c6", swatchImageUrl: "" },
+    { key: "Sand", title: "Sand", price: "", adds: "", description: "", note: "", swatchColor: "#c7b99a", swatchImageUrl: "" },
+    { key: "Gray Mist", title: "Gray Mist", price: "", adds: "", description: "", note: "", swatchColor: "#a9aaa6", swatchImageUrl: "" },
+    { key: "Espresso", title: "Espresso", price: "", adds: "", description: "", note: "", swatchColor: "#453a36", swatchImageUrl: "" }
   ],
   liftOptions: [
     {
@@ -347,7 +355,7 @@ function mergeConfiguratorSchema(value) {
       // empty title/key back to "Option #" while the user is typing.
       const title = hasTitle ? String(option.title ?? "") : String(option.key ?? `Option ${index + 1}`);
       const key = hasKey ? String(option.key ?? "") : String(title || `Option ${index + 1}`);
-      return {
+      const normalized = {
         key,
         title,
         price: String(option.price ?? ""),
@@ -355,6 +363,10 @@ function mergeConfiguratorSchema(value) {
         description: String(option.description ?? ""),
         note: String(option.note ?? "")
       };
+      // Color options carry swatch data; keep it only when present.
+      if (option.swatchColor !== undefined) normalized.swatchColor = String(option.swatchColor ?? "");
+      if (option.swatchImageUrl !== undefined) normalized.swatchImageUrl = String(option.swatchImageUrl ?? "");
+      return normalized;
     });
   };
   const normalizeCustomSections = (items) => {
@@ -402,6 +414,7 @@ function mergeConfiguratorSchema(value) {
     customSections: normalizeCustomSections(merged.customSections),
     eighths: Array.isArray(merged.eighths) && merged.eighths.length ? merged.eighths : DEFAULT_CONFIGURATOR_SCHEMA.eighths,
     mountOptions: normalizeOptions(merged.mountOptions, DEFAULT_CONFIGURATOR_SCHEMA.mountOptions),
+    colorOptions: normalizeOptions(merged.colorOptions, DEFAULT_CONFIGURATOR_SCHEMA.colorOptions),
     liftOptions: normalizeOptions(merged.liftOptions, DEFAULT_CONFIGURATOR_SCHEMA.liftOptions),
     headrailOptions: normalizeOptions(merged.headrailOptions, DEFAULT_CONFIGURATOR_SCHEMA.headrailOptions)
   };
@@ -1648,6 +1661,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
     widthFraction: "0/0",
     height: "36",
     heightFraction: "0/0",
+    color: "",
     lift: "",
     headrail: "Standard",
     quantity: "1"
@@ -1663,11 +1677,15 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
   const widthInches = Array.from({ length: Math.max(1, widthMax - widthMin + 1) }, (_, i) => String(i + widthMin));
   const heightInches = Array.from({ length: Math.max(1, heightMax - heightMin + 1) }, (_, i) => String(i + heightMin));
   const mountOptions = activeConfiguratorSchema.mountOptions;
+  const colorOptions = activeConfiguratorSchema.colorOptions;
   const liftOptions = activeConfiguratorSchema.liftOptions;
   const headrailOptions = activeConfiguratorSchema.headrailOptions;
   const visibleSections = activeConfiguratorSchema.visibleSections || DEFAULT_CONFIGURATOR_SCHEMA.visibleSections;
   const showMountSection = visibleSections.mountOptions !== false && mountOptions.length > 0;
+  const showColorSection = visibleSections.colorOptions !== false && colorOptions.length > 0;
   const showLiftSection = visibleSections.liftOptions !== false && liftOptions.length > 0;
+  const selectedColor = showColorSection ? colorOptions.find((option) => option.key === config.color) || null : null;
+  const selectedColorSwatch = selectedColor?.swatchColor || "";
   const showHeadrailSection = visibleSections.headrailOptions !== false && headrailOptions.length > 0;
   const visibleCustomSections = (activeConfiguratorSchema.customSections || []).filter((section) => section.visible !== false && Array.isArray(section.options) && section.options.length);
 
@@ -1778,6 +1796,36 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
             </div>
           </section>
 
+          {showColorSection ? (
+          <section className="hdc-section hdc-color-section">
+            <h2>Color</h2>
+            <div className="hdc-color-selected">Color: <strong>{selectedColor ? selectedColor.title : "Select a Color"}</strong>{selectedColor && (selectedColor.adds || selectedColor.price) ? <span>{selectedColor.adds || selectedColor.price}</span> : null}</div>
+            <div className="hdc-color-swatches" role="radiogroup" aria-label="Color">
+              {colorOptions.map((option) => {
+                const active = config.color === option.key;
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    aria-label={option.title}
+                    title={option.title}
+                    className={active ? "hdc-color-swatch active" : "hdc-color-swatch"}
+                    onClick={() => updateConfig("color", option.key)}
+                  >
+                    <span className="hdc-color-chip" style={{ background: option.swatchColor || "#f4f4f4" }}>
+                      {option.swatchImageUrl ? <img src={imgSrc(option.swatchImageUrl)} alt="" /> : null}
+                    </span>
+                    <span className="hdc-color-name">{option.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {selectedColor?.description ? <p className="hdc-color-description">{selectedColor.description}</p> : null}
+          </section>
+          ) : null}
+
           {showLiftSection ? (
           <section className="hdc-section">
             <h2>Lift</h2>
@@ -1825,7 +1873,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
               {showMountSection ? <div><span>Mount:</span><b>{config.mount}</b></div> : null}
               <div><span>Width:</span><b>{config.width} {config.widthFraction}</b></div>
               <div><span>Height:</span><b>{config.height} {config.heightFraction}</b></div>
-              <div><span>Color:</span><b></b></div>
+              {showColorSection ? <div><span>Color:</span><b>{selectedColor?.title || ""}</b></div> : null}
               {showLiftSection ? <div><span>Lift:</span><b>{config.lift}</b></div> : null}
               {showHeadrailSection ? <div><span>Headrail:</span><b>{config.headrail}</b></div> : null}
               {visibleCustomSections.map((section) => <div key={`review-${section.id}`}><span>{section.title}:</span><b>{config[`custom_${section.id}`] || ""}</b></div>)}
@@ -1846,7 +1894,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
             <div className="hdc-preview-summary">
               <h3>{productTitle}</h3>
               <p>Brand: <a href="#0">{brand}</a></p>
-              <p>Shown in: Select a Color to Preview</p>
+              <p>Shown in: {selectedColor ? <b>{selectedColor.title}</b> : "Select a Color to Preview"}</p>
               <p>Estimated Delivery Date: <b>May 18</b></p>
               <p>Based on your selections</p>
               <div className="hdc-side-price"><s>${originalDollars}.{originalCents}</s><b>{savingsPct ? `Save ${savingsPct}%` : ""}</b><strong>${saleDollars}.{saleCents}</strong><small>Price Includes Options</small></div>
@@ -1855,7 +1903,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
             <div className="hdc-preview-stage">
               <button type="button" className="hdc-zoom">Zoom In</button>
               <div className="hdc-window-large" aria-label="Product preview placeholder">
-                <div className="hdc-shade-large">{Array.from({ length: 18 }).map((_, index) => <span key={index} />)}</div>
+                <div className="hdc-shade-large" style={selectedColorSwatch ? { background: selectedColorSwatch } : undefined}>{Array.from({ length: 18 }).map((_, index) => <span key={index} style={selectedColorSwatch ? { background: `linear-gradient(180deg, rgba(255,255,255,.45), rgba(0,0,0,.18) 60%, rgba(255,255,255,.25)), ${selectedColorSwatch}` } : undefined} />)}</div>
                 <div className="hdc-outdoor-view"><i /><i /></div>
                 <div className="hdc-drag-text">Drag Image</div>
               </div>
@@ -1881,6 +1929,7 @@ function ConfiguratorSettingsEditor({ schema, setSchema, product = null, isEdite
   const productId = product?.id || "configurator";
   const builtInOptionGroups = [
     { key: "mountOptions", title: "Mount Options", description: "Add, remove, reorder, or rewrite the mount choices shown at the top of the configurator." },
+    { key: "colorOptions", title: "Color Options", description: "Manage the color swatches shoppers can pick. Each color can use a hex color or a swatch image." },
     { key: "liftOptions", title: "Lift Options", description: "Control the lift choices available after size entry." },
     { key: "headrailOptions", title: "Headrail Options", description: "Manage the headrail configurations available near the bottom of the configurator." }
   ];
@@ -1960,7 +2009,9 @@ function ConfiguratorSettingsEditor({ schema, setSchema, product = null, isEdite
       const base = mergeConfiguratorSchema(current);
       const options = [...getGroupOptions(base, groupKey)];
       const nextTitle = makeUniqueOptionKey("New Option", options);
-      options.push({ key: nextTitle, title: nextTitle, price: "", adds: "", description: "Describe this configurator option.", note: "" });
+      options.push(groupKey === "colorOptions"
+        ? { key: nextTitle, title: nextTitle, price: "", adds: "", description: "", note: "", swatchColor: "#cccccc", swatchImageUrl: "" }
+        : { key: nextTitle, title: nextTitle, price: "", adds: "", description: "Describe this configurator option.", note: "" });
       return setGroupOptions(base, groupKey, options);
     });
     setOpenConfigSections((prev) => ({ ...prev, [groupKey]: true }));
@@ -2358,6 +2409,17 @@ function ConfiguratorSettingsEditor({ schema, setSchema, product = null, isEdite
                           <label>Add-on Price<input value={option.adds || ""} onChange={(e) => updateOption(group.key, index, "adds", e.target.value)} placeholder="Optional" /></label>
                           <label className="wide">Description<textarea rows={2} value={option.description || ""} onChange={(e) => updateOption(group.key, index, "description", e.target.value)} /></label>
                           <label className="wide">Note<textarea rows={2} value={option.note || ""} onChange={(e) => updateOption(group.key, index, "note", e.target.value)} placeholder="Optional supporting note" /></label>
+                          {group.key === "colorOptions" ? (
+                            <>
+                              <label>Swatch Color
+                                <span className="config-swatch-color-field">
+                                  <input type="color" value={/^#[0-9a-f]{6}$/i.test(option.swatchColor || "") ? option.swatchColor : "#cccccc"} onChange={(e) => updateOption(group.key, index, "swatchColor", e.target.value)} aria-label="Pick swatch color" />
+                                  <input value={option.swatchColor || ""} onChange={(e) => updateOption(group.key, index, "swatchColor", e.target.value)} placeholder="#f4f4f4" />
+                                </span>
+                              </label>
+                              <label>Swatch Image URL<input value={option.swatchImageUrl || ""} onChange={(e) => updateOption(group.key, index, "swatchImageUrl", e.target.value)} placeholder="Optional, overrides color" /></label>
+                            </>
+                          ) : null}
                         </div>
                         <details className="config-option-advanced">
                           <summary>Advanced</summary>
@@ -2402,7 +2464,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
   const activeConfiguratorSchema = activeConfiguratorProduct ? getProductConfiguratorSchema(activeConfiguratorProduct) : DEFAULT_CONFIGURATOR_SCHEMA;
   const activeVisibleConfiguratorSchema = activeConfiguratorProduct ? getRenderableConfiguratorSchema(activeConfiguratorProduct, activeConfiguratorSchema) : DEFAULT_CONFIGURATOR_SCHEMA;
   const activeConfiguratorVisibleSections = activeConfiguratorSchema.visibleSections || DEFAULT_CONFIGURATOR_SCHEMA.visibleSections;
-  const activeConfiguratorShownSectionCount = 1 + ["mountOptions", "liftOptions", "headrailOptions"].filter((key) => activeConfiguratorVisibleSections[key] !== false).length + (activeConfiguratorSchema.customSections || []).filter((section) => section.visible !== false).length;
+  const activeConfiguratorShownSectionCount = 1 + ["mountOptions", "colorOptions", "liftOptions", "headrailOptions"].filter((key) => activeConfiguratorVisibleSections[key] !== false).length + (activeConfiguratorSchema.customSections || []).filter((section) => section.visible !== false).length;
   const activeConfiguratorCustomOptionCount = (activeConfiguratorSchema.customSections || []).reduce((sum, section) => sum + (Array.isArray(section.options) ? section.options.length : 0), 0);
 
   const editorVisibleProducts = useMemo(() => {
@@ -14363,5 +14425,22 @@ button { cursor: pointer; }
   .banner-preset-row { grid-template-columns: 1fr; align-items: flex-start; }
   .banner-preset-actions { flex-wrap: wrap; }
 }
+
+/* Configurator color selection */
+.hdc-color-selected { font-size: 14px; color: #333; margin: 4px 0 12px; }
+.hdc-color-selected strong { font-weight: 700; }
+.hdc-color-selected span { margin-left: 8px; color: #f96302; font-weight: 700; }
+.hdc-color-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 12px; }
+.hdc-color-swatch { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 4px; background: #fff; border: 1px solid transparent; border-radius: 4px; cursor: pointer; font: inherit; }
+.hdc-color-swatch:hover { border-color: #ccc; }
+.hdc-color-swatch:focus-visible { outline: 2px solid #f96302; outline-offset: 2px; }
+.hdc-color-chip { position: relative; display: block; width: 56px; height: 56px; border-radius: 50%; border: 1px solid #c8c8c8; overflow: hidden; box-shadow: inset 0 0 0 3px #fff; }
+.hdc-color-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hdc-color-swatch.active .hdc-color-chip { border: 2px solid #f96302; }
+.hdc-color-name { font-size: 12px; line-height: 1.2; color: #333; text-align: center; }
+.hdc-color-swatch.active .hdc-color-name { font-weight: 700; }
+.hdc-color-description { margin: 10px 0 0; font-size: 13px; color: #555; }
+.config-swatch-color-field { display: flex; gap: 6px; align-items: center; }
+.config-swatch-color-field input[type="color"] { width: 38px; min-width: 38px; height: 34px; padding: 2px; }
 
 `;
