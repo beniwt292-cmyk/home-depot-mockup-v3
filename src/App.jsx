@@ -15038,4 +15038,16 @@ button { cursor: pointer; }
 .hd-root .hdc-option-price b { color: #333 !important; font-size: 13px !important; font-weight: 700 !important; margin-right: 6px; }
 .hd-root .hdc-option-price em { color: #333 !important; font-size: 13px !important; font-style: normal !important; font-weight: 400 !important; }
 
+/* Category titles: Home Depot bold condensed headline */
+.hd-category-landing-title,
+.hd-cat-title-block h1,
+.category-screenshot-page .hd-cat-title-block h1 {
+  font-family: "Helvetica Neue Condensed Bold", "HelveticaNeue-CondensedBold", "Roboto Condensed", "Arial Narrow", sans-serif !important;
+  font-stretch: condensed !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0 !important;
+  color: #222 !important;
+}
+
 `;
