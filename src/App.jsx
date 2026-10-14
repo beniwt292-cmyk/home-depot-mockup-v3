@@ -347,6 +347,32 @@ const DEFAULT_CONFIGURATOR_SCHEMA = {
   ]
 };
 
+// Optional "pick your paint, get fabric recommendations" flow (e.g. BEHR x VENETA).
+// Each paint lists VENETA color keys that blend (tone-on-tone) or contrast (accent) with it.
+function normalizePaintPairing(value) {
+  const source = value && typeof value === "object" ? value : {};
+  const keyList = (list) => (Array.isArray(list) ? list : String(list || "").split(","))
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  const paints = (Array.isArray(source.paints) ? source.paints : [])
+    .map((paint) => ({
+      key: String(paint?.key || paint?.code || paint?.name || "").trim(),
+      name: String(paint?.name || "").trim(),
+      code: String(paint?.code || "").trim(),
+      hex: String(paint?.hex || "").trim(),
+      blend: keyList(paint?.blend),
+      accent: keyList(paint?.accent)
+    }))
+    .filter((paint) => paint.key && paint.name);
+  return {
+    enabled: Boolean(source.enabled) && paints.length > 0,
+    brand: String(source.brand || "BEHR"),
+    title: String(source.title || "Choose Your BEHR Paint Color"),
+    subtitle: String(source.subtitle || "Pick your wall color and we'll recommend window shade colors that pair with it."),
+    paints
+  };
+}
+
 function mergeConfiguratorSchema(value) {
   const cleanNumber = (raw, fallback) => {
     const n = Number(raw);
@@ -423,6 +449,7 @@ function mergeConfiguratorSchema(value) {
     mountOptions: normalizeOptions(merged.mountOptions, DEFAULT_CONFIGURATOR_SCHEMA.mountOptions),
     colorGroupTitle: String(merged.colorGroupTitle ?? DEFAULT_CONFIGURATOR_SCHEMA.colorGroupTitle),
     colorOptions: normalizeOptions(merged.colorOptions, DEFAULT_CONFIGURATOR_SCHEMA.colorOptions),
+    paintPairing: normalizePaintPairing(merged.paintPairing),
     liftOptions: normalizeOptions(merged.liftOptions, DEFAULT_CONFIGURATOR_SCHEMA.liftOptions),
     headrailOptions: normalizeOptions(merged.headrailOptions, DEFAULT_CONFIGURATOR_SCHEMA.headrailOptions)
   };
@@ -1670,6 +1697,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
     height: "36",
     heightFraction: "0/0",
     color: "",
+    paint: "",
     lift: "",
     headrail: "Standard",
     quantity: "1"
@@ -1694,6 +1722,38 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
   const showLiftSection = visibleSections.liftOptions !== false && liftOptions.length > 0;
   const selectedColor = showColorSection ? colorOptions.find((option) => option.key === config.color) || null : null;
   const selectedColorSwatch = selectedColor?.swatchColor || "";
+  const paintPairing = activeConfiguratorSchema.paintPairing;
+  const showPaintPairing = showColorSection && paintPairing?.enabled;
+  const selectedPaint = showPaintPairing ? paintPairing.paints.find((paint) => paint.key === config.paint) || null : null;
+  const [showAllColors, setShowAllColors] = useState(false);
+  const findColor = (key) => colorOptions.find((option) => option.key === key);
+  const recommendedColors = selectedPaint
+    ? [
+        ...selectedPaint.blend.map((key) => ({ option: findColor(key), role: "Tone-on-Tone" })),
+        ...selectedPaint.accent.map((key) => ({ option: findColor(key), role: "Accent" }))
+      ].filter((item) => item.option)
+    : [];
+  const renderColorSwatch = (option, role = "") => {
+    const active = config.color === option.key;
+    return (
+      <button
+        key={`${role}-${option.key}`}
+        type="button"
+        role="radio"
+        aria-checked={active}
+        aria-label={role ? `${option.title} (${role})` : option.title}
+        title={option.title}
+        className={active ? "hdc-color-swatch active" : "hdc-color-swatch"}
+        onClick={() => updateConfig("color", option.key)}
+      >
+        <span className="hdc-color-chip" style={{ background: option.swatchColor || "#f4f4f4" }}>
+          {option.swatchImageUrl ? <img src={imgSrc(option.swatchImageUrl)} alt="" /> : null}
+          {role ? <span className={`hdc-color-role ${role === "Accent" ? "is-accent" : ""}`}>{role}</span> : null}
+        </span>
+        <span className="hdc-color-name">{option.title}{option.adds ? <em className="hdc-color-addon">{option.adds}</em> : null}</span>
+      </button>
+    );
+  };
   const showHeadrailSection = visibleSections.headrailOptions !== false && headrailOptions.length > 0;
   const visibleCustomSections = (activeConfiguratorSchema.customSections || []).filter((section) => section.visible !== false && Array.isArray(section.options) && section.options.length);
 
@@ -1812,29 +1872,57 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
           {showColorSection ? (
           <section className="hdc-section hdc-color-section">
             <h2>Color</h2>
-            {activeConfiguratorSchema.colorGroupTitle ? <h3 className="hdc-color-group-title">{activeConfiguratorSchema.colorGroupTitle}</h3> : null}
-            <div className="hdc-color-swatches" role="radiogroup" aria-label="Color">
-              {colorOptions.map((option) => {
-                const active = config.color === option.key;
-                return (
-                  <button
-                    key={option.key}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    aria-label={option.title}
-                    title={option.title}
-                    className={active ? "hdc-color-swatch active" : "hdc-color-swatch"}
-                    onClick={() => updateConfig("color", option.key)}
-                  >
-                    <span className="hdc-color-chip" style={{ background: option.swatchColor || "#f4f4f4" }}>
-                      {option.swatchImageUrl ? <img src={imgSrc(option.swatchImageUrl)} alt="" /> : null}
-                    </span>
-                    <span className="hdc-color-name">{option.title}{option.adds ? <em className="hdc-color-addon">{option.adds}</em> : null}</span>
+            {showPaintPairing ? (
+              <div className="hdc-paint-pairing">
+                <div className="hdc-paint-step">
+                  <h3 className="hdc-color-group-title"><span className="hdc-step-num">1</span>{paintPairing.title}</h3>
+                  {paintPairing.subtitle ? <p className="hdc-paint-subtitle">{paintPairing.subtitle}</p> : null}
+                  <div className="hdc-paint-chips" role="radiogroup" aria-label={`${paintPairing.brand} paint color`}>
+                    {paintPairing.paints.map((paint) => {
+                      const active = config.paint === paint.key;
+                      return (
+                        <button
+                          key={paint.key}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          className={active ? "hdc-paint-chip active" : "hdc-paint-chip"}
+                          onClick={() => updateConfig("paint", active ? "" : paint.key)}
+                        >
+                          <span className="hdc-paint-chip-color" style={{ background: paint.hex || "#eee" }} />
+                          <span className="hdc-paint-chip-name">{paint.name}</span>
+                          {paint.code ? <span className="hdc-paint-chip-code">{paint.code}</span> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="hdc-paint-step">
+                  <h3 className="hdc-color-group-title"><span className="hdc-step-num">2</span>{selectedPaint ? `Recommended ${brand} Colors for ${selectedPaint.name}` : `Choose Your ${brand} Color`}</h3>
+                  {selectedPaint ? (
+                    <>
+                      <p className="hdc-paint-subtitle">Tone-on-Tone colors blend softly with your walls. Accent colors add contrast.</p>
+                      <div className="hdc-color-swatches" role="radiogroup" aria-label="Recommended colors">
+                        {recommendedColors.map(({ option, role }) => renderColorSwatch(option, role))}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="hdc-paint-subtitle">Select a paint color above to see recommended colors.</p>
+                  )}
+                  <button type="button" className="hdc-show-all-colors" onClick={() => setShowAllColors((value) => !value)} aria-expanded={showAllColors}>
+                    {showAllColors ? "Hide All Colors" : `Browse All ${colorOptions.length} ${activeConfiguratorSchema.colorGroupTitle || "Colors"}`}
                   </button>
-                );
-              })}
-            </div>
+                </div>
+              </div>
+            ) : null}
+            {!showPaintPairing || showAllColors ? (
+              <>
+                {activeConfiguratorSchema.colorGroupTitle ? <h3 className="hdc-color-group-title">{activeConfiguratorSchema.colorGroupTitle}</h3> : null}
+                <div className="hdc-color-swatches" role="radiogroup" aria-label="Color">
+                  {colorOptions.map((option) => renderColorSwatch(option))}
+                </div>
+              </>
+            ) : null}
             {selectedColor?.description ? <p className="hdc-color-description">{selectedColor.description}</p> : null}
           </section>
           ) : null}
@@ -1887,6 +1975,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
               <div><span>Width:</span><b>{config.width} {config.widthFraction}</b></div>
               <div><span>Height:</span><b>{config.height} {config.heightFraction}</b></div>
               {showColorSection ? <div><span>Color:</span><b>{selectedColor?.title || ""}</b></div> : null}
+              {selectedPaint ? <div><span>Paint Pairing:</span><b>{paintPairing.brand} {selectedPaint.name} {selectedPaint.code}</b></div> : null}
               {showLiftSection ? <div><span>Lift:</span><b>{config.lift}</b></div> : null}
               {showHeadrailSection ? <div><span>Headrail:</span><b>{config.headrail}</b></div> : null}
               {visibleCustomSections.map((section) => <div key={`review-${section.id}`}><span>{section.title}:</span><b>{config[`custom_${section.id}`] || ""}</b></div>)}
@@ -1908,12 +1997,13 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
               <h3>{productTitle}</h3>
               <p>Brand: <a href="#0">{brand}</a></p>
               <p>Shown in: {selectedColor ? <b>{selectedColor.title}</b> : "Select a Color to Preview"}</p>
+              {selectedPaint ? <p>Paired with: <b>{paintPairing.brand} {selectedPaint.name} {selectedPaint.code}</b></p> : null}
               <p>Estimated Delivery Date: <b>May 18</b></p>
               <p>Based on your selections</p>
               <div className="hdc-side-price"><s>${originalDollars}.{originalCents}</s><b>{savingsPct ? `Save ${savingsPct}%` : ""}</b><strong>${saleDollars}.{saleCents}</strong><small>Price Includes Options</small></div>
             </div>
             <div className="hdc-preview-title"><span>New</span> Enhanced Product Preview</div>
-            <div className="hdc-preview-stage">
+            <div className="hdc-preview-stage" style={selectedPaint?.hex ? { background: selectedPaint.hex } : undefined}>
               <button type="button" className="hdc-zoom">Zoom In</button>
               <div className="hdc-window-large" aria-label="Product preview placeholder">
                 <div className="hdc-shade-large" style={selectedColorSwatch ? { background: selectedColorSwatch } : undefined}>{Array.from({ length: 18 }).map((_, index) => <span key={index} style={selectedColorSwatch ? { background: `linear-gradient(180deg, rgba(255,255,255,.45), rgba(0,0,0,.18) 60%, rgba(255,255,255,.25)), ${selectedColorSwatch}` } : undefined} />)}</div>
@@ -2003,6 +2093,21 @@ function ConfiguratorSettingsEditor({ schema, setSchema, product = null, isEdite
 
   const updateSchemaField = (field, value) => {
     setSchema((current) => mergeConfiguratorSchema({ ...current, [field]: value }));
+  };
+
+  const updatePaintPairing = (changes) => {
+    setSchema((current) => {
+      const base = mergeConfiguratorSchema(current);
+      return mergeConfiguratorSchema({ ...base, paintPairing: { ...base.paintPairing, ...changes } });
+    });
+  };
+
+  const updatePaint = (index, field, value) => {
+    setSchema((current) => {
+      const base = mergeConfiguratorSchema(current);
+      const paints = base.paintPairing.paints.map((paint, i) => (i === index ? { ...paint, [field]: value } : paint));
+      return mergeConfiguratorSchema({ ...base, paintPairing: { ...base.paintPairing, paints } });
+    });
   };
 
   const updateOption = (groupKey, index, field, value) => {
@@ -2376,6 +2481,22 @@ function ConfiguratorSettingsEditor({ schema, setSchema, product = null, isEdite
             {group.key === "colorOptions" ? (
               <div className="config-custom-section-fields">
                 <label className="wide">Color Group Heading<input value={safeSchema.colorGroupTitle || ""} onChange={(e) => updateSchemaField("colorGroupTitle", e.target.value)} placeholder="e.g. Light Filtering Colors (leave blank to hide)" /></label>
+                {safeSchema.paintPairing?.paints?.length ? (
+                  <details className="config-option-advanced wide">
+                    <summary>Paint Pairing ({safeSchema.paintPairing.paints.length} paint colors)</summary>
+                    <label className="config-inline-check"><input type="checkbox" checked={safeSchema.paintPairing.enabled} onChange={(e) => updatePaintPairing({ enabled: e.target.checked })} /> Show "pick your paint" step</label>
+                    <label>Step 1 Heading<input value={safeSchema.paintPairing.title} onChange={(e) => updatePaintPairing({ title: e.target.value })} /></label>
+                    <label>Step 1 Description<input value={safeSchema.paintPairing.subtitle} onChange={(e) => updatePaintPairing({ subtitle: e.target.value })} /></label>
+                    {safeSchema.paintPairing.paints.map((paint, index) => (
+                      <fieldset key={`paint-${paint.key}-${index}`} className="config-paint-fieldset">
+                        <legend><span className="config-paint-dot" style={{ background: paint.hex || "#eee" }} />{paint.name} {paint.code}</legend>
+                        <label>Paint Color (hex)<input value={paint.hex} onChange={(e) => updatePaint(index, "hex", e.target.value)} /></label>
+                        <label>Tone-on-Tone Colors (comma separated)<input key={`blend-${paint.blend.join("|")}`} defaultValue={paint.blend.join(", ")} onBlur={(e) => updatePaint(index, "blend", e.target.value)} /></label>
+                        <label>Accent Colors (comma separated)<input key={`accent-${paint.accent.join("|")}`} defaultValue={paint.accent.join(", ")} onBlur={(e) => updatePaint(index, "accent", e.target.value)} /></label>
+                      </fieldset>
+                    ))}
+                  </details>
+                ) : null}
               </div>
             ) : null}
             <div className="config-section-toolbar">
@@ -14466,9 +14587,27 @@ button { cursor: pointer; }
 .hdc-color-chip img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: cover; display: block; }
 .hdc-color-name { display: flex; flex-direction: column; justify-content: center; min-height: 36px; padding: 5px 6px 6px; font-size: 11px; font-weight: 700; line-height: 1.3; color: #555; }
 .hdc-color-name em { font-style: normal; color: #f96302; }
+.config-inline-check { display: flex !important; flex-direction: row !important; align-items: center; gap: 6px; }
+.config-paint-fieldset { display: grid; gap: 6px; margin: 8px 0 0; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; }
+.config-paint-fieldset legend { display: flex; align-items: center; gap: 6px; padding: 0 4px; font-size: 12px; font-weight: 700; }
+.config-paint-dot { display: inline-block; width: 14px; height: 14px; border: 1px solid rgba(0,0,0,.2); border-radius: 50%; }
+.hdc-paint-pairing { display: grid; gap: 18px; margin-bottom: 18px; }
+.hdc-step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-right: 8px; border-radius: 50%; background: #f96302; color: #fff; font-size: 12px; font-weight: 700; vertical-align: 1px; }
+.hdc-paint-subtitle { margin: 0 0 10px; font-size: 13px; color: #555; }
+.hdc-paint-chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.hdc-paint-chip { display: flex; flex-direction: column; padding: 0 0 6px; background: #fff; border: 1px solid #d0d0d0; border-radius: 3px; box-shadow: 0 1px 2px rgba(0,0,0,.15); cursor: pointer; font: inherit; text-align: center; overflow: hidden; }
+.hdc-paint-chip:hover { border-color: #999; }
+.hdc-paint-chip:focus-visible { outline: 2px solid #f96302; outline-offset: 2px; }
+.hdc-paint-chip.active { border: 2px solid #f96302; }
+.hdc-paint-chip-color { display: block; height: 56px; border-bottom: 1px solid rgba(0,0,0,.08); }
+.hdc-paint-chip-name { padding: 6px 4px 0; font-size: 11px; font-weight: 700; line-height: 1.25; color: #333; }
+.hdc-paint-chip-code { font-size: 10px; color: #777; }
+.hdc-color-role { position: absolute; z-index: 2; left: 4px; top: 4px; padding: 2px 5px; border-radius: 2px; background: rgba(255,255,255,.92); color: #333; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
+.hdc-color-role.is-accent { background: #333; color: #fff; }
+.hdc-show-all-colors { margin-top: 12px; padding: 0; background: none; border: 0; color: #126b93; font: inherit; font-size: 13px; font-weight: 700; text-decoration: underline; cursor: pointer; }
 .hdc-color-description { margin: 10px 0 0; font-size: 13px; color: #555; }
 @media (max-width: 900px) { .hdc-color-swatches { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .hdc-color-swatches { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .hdc-color-swatches, .hdc-paint-chips { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .config-swatch-color-field { display: flex; gap: 6px; align-items: center; }
 .config-swatch-color-field input[type="color"] { width: 38px; min-width: 38px; height: 34px; padding: 2px; }
 
