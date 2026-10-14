@@ -1725,7 +1725,6 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
   const paintPairing = activeConfiguratorSchema.paintPairing;
   const showPaintPairing = showColorSection && paintPairing?.enabled;
   const selectedPaint = showPaintPairing ? paintPairing.paints.find((paint) => paint.key === config.paint) || null : null;
-  const [showAllColors, setShowAllColors] = useState(false);
   const findColor = (key) => colorOptions.find((option) => option.key === key);
   const recommendedColors = selectedPaint
     ? [
@@ -1733,6 +1732,11 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
         ...selectedPaint.accent.map((key) => ({ option: findColor(key), role: "Accent" }))
       ].filter((item) => item.option)
     : [];
+  // Fabric choices depend on the paint, so clear a fabric that isn't recommended for the new paint.
+  const selectPaint = (paint) => setConfig((current) => {
+    const allowed = paint ? [...paint.blend, ...paint.accent] : [];
+    return { ...current, paint: paint ? paint.key : "", color: allowed.includes(current.color) ? current.color : "" };
+  });
   const renderColorSwatch = (option, role = "") => {
     const active = config.color === option.key;
     return (
@@ -1887,7 +1891,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
                           role="radio"
                           aria-checked={active}
                           className={active ? "hdc-paint-chip active" : "hdc-paint-chip"}
-                          onClick={() => updateConfig("paint", active ? "" : paint.key)}
+                          onClick={() => selectPaint(active ? null : paint)}
                         >
                           <span className="hdc-paint-chip-color" style={{ background: paint.hex || "#eee" }} />
                           <span className="hdc-paint-chip-name">{paint.name}</span>
@@ -1909,13 +1913,10 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
                   ) : (
                     <p className="hdc-paint-subtitle">Select a paint color above to see recommended colors.</p>
                   )}
-                  <button type="button" className="hdc-show-all-colors" onClick={() => setShowAllColors((value) => !value)} aria-expanded={showAllColors}>
-                    {showAllColors ? "Hide All Colors" : `Browse All ${colorOptions.length} ${activeConfiguratorSchema.colorGroupTitle || "Colors"}`}
-                  </button>
                 </div>
               </div>
             ) : null}
-            {!showPaintPairing || showAllColors ? (
+            {!showPaintPairing ? (
               <>
                 {activeConfiguratorSchema.colorGroupTitle ? <h3 className="hdc-color-group-title">{activeConfiguratorSchema.colorGroupTitle}</h3> : null}
                 <div className="hdc-color-swatches" role="radiogroup" aria-label="Color">
@@ -14605,7 +14606,6 @@ button { cursor: pointer; }
 .hdc-paint-chip-code { font-size: 10px; color: #777; }
 .hdc-color-role { position: absolute; z-index: 2; left: 4px; top: 4px; padding: 2px 5px; border-radius: 2px; background: rgba(255,255,255,.92); color: #333; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
 .hdc-color-role.is-accent { background: #333; color: #fff; }
-.hdc-show-all-colors { margin-top: 12px; padding: 0; background: none; border: 0; color: #126b93; font: inherit; font-size: 13px; font-weight: 700; text-decoration: underline; cursor: pointer; }
 .hdc-color-description { margin: 10px 0 0; font-size: 13px; color: #555; }
 @media (max-width: 900px) { .hdc-color-swatches { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .hdc-color-swatches, .hdc-paint-chips { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
