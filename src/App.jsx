@@ -2221,6 +2221,7 @@ function PreviewScene({ isRoller, colorSwatch, wallPaint, reverseRoll, lowered, 
 
   return (
     <div ref={stageRef} className={`hdc-preview-stage${large ? " is-large" : ""}${wallPaint ? " has-wall-paint" : ""}`} style={wallPaint ? { "--hdc-wall-paint": wallPaint } : undefined}>
+      <div className="hdc-room" aria-hidden="true"><span className="hdc-room-light" /></div>
       <div
         ref={assemblyRef}
         className={`hdc-window-assembly ${mountClass}`}
@@ -2238,8 +2239,9 @@ function PreviewScene({ isRoller, colorSwatch, wallPaint, reverseRoll, lowered, 
         onKeyDown={onKeyDown}
       >
         <div className="hdc-window-large">
-          <div className="hdc-outdoor-view"><i /><i /></div>
+          <div className="hdc-outdoor-view"><b className="hdc-sky" /><b className="hdc-hills" /><b className="hdc-tree" /><b className="hdc-lawn" /><i /><i /></div>
         </div>
+        <div className="hdc-window-sill" aria-hidden="true" />
         <div className={`hdc-shade-zone ${mountClass}`}>
           {lightGuard ? <><span className="hdc-light-guard is-left" /><span className="hdc-light-guard is-right" /></> : null}
           {isRoller ? (
@@ -14747,17 +14749,27 @@ button { cursor: pointer; }
 .hdc-preview-title { margin: 12px 0 7px; color: #666; font-size: 14px; }
 .hdc-preview-title span { display: inline-block; margin-right: 6px; padding: 2px 6px; border-radius: 3px; background: #f96302; color: #fff; font-size: 11px; font-weight: 700; text-transform: uppercase; vertical-align: 1px; }
 .hdc-preview-frame { position: relative; }
-.hdc-preview-stage { position: relative; display: flex; align-items: center; justify-content: center; height: 470px; background: #d8d8d8; overflow: hidden; }
-.hdc-preview-stage.has-wall-paint { background: var(--hdc-wall-paint); }
+.hdc-preview-stage { position: relative; display: flex; align-items: center; justify-content: center; height: 470px; overflow: hidden; }
 .hdc-preview-stage.is-large { height: min(72vh, 680px); }
 .hdc-zoom { position: absolute; top: 10px; right: 10px; z-index: 3; height: 32px; padding: 0 12px; border: 2px solid #f96302; border-radius: 4px; background: #fff; color: #f96302; font-size: 12px; font-weight: 700; cursor: pointer; }
 .hdc-zoom:hover { background: #fff4ec; }
-.hdc-outdoor-view { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; }
-.hdc-outdoor-view i { border-right: 4px solid #c6c6c6; background: radial-gradient(ellipse at 50% 92%, #9cc78d 0 22%, transparent 23%), linear-gradient(180deg, #eaf4ff 0%, #f8fbff 55%, #dcebd9 100%); }
+.hdc-preview-stage { --hdc-wall: #e4e0d8; background: var(--hdc-wall); }
+.hdc-preview-stage.has-wall-paint { --hdc-wall: var(--hdc-wall-paint); background: var(--hdc-wall); }
+.hdc-room { position: absolute; inset: 0; pointer-events: none; }
+.hdc-room::before { content: ""; position: absolute; inset: 0; background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.012) 0 1px, transparent 1px 3px), repeating-linear-gradient(90deg, rgba(255,255,255,.015) 0 1px, transparent 1px 4px); }
+.hdc-room-light { position: absolute; inset: 0; background: radial-gradient(ellipse 70% 60% at 50% 42%, rgba(255,250,235,.38), transparent 70%), linear-gradient(180deg, rgba(0,0,0,.07), transparent 25%, transparent 70%, rgba(0,0,0,.1)); }
+.hdc-outdoor-view { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
+.hdc-outdoor-view b { position: absolute; display: block; }
+.hdc-sky { inset: 0; background: linear-gradient(180deg, #a9cdee 0%, #d4e7f7 55%, #eef5fb 72%); }
+.hdc-hills { left: -10%; right: -10%; bottom: 11%; height: 12%; border-radius: 50% 50% 0 0 / 100% 100% 0 0; background: linear-gradient(180deg, #a7c3a0, #8fb18a); opacity: .85; }
+.hdc-tree { right: 12%; bottom: 12%; width: 16%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #8fbf7a, #5e9152 70%); }
+.hdc-lawn { left: 0; right: 0; bottom: 0; height: 12%; background: linear-gradient(180deg, #8dbb76, #6d9d5a); }
+.hdc-outdoor-view i { position: relative; z-index: 1; border-right: 6px solid #f4f2ee; background: linear-gradient(135deg, rgba(255,255,255,.35) 0 18%, transparent 30% 60%, rgba(255,255,255,.15) 70%, transparent 80%); }
 .hdc-outdoor-view i:last-child { border-right: 0; }
+.hdc-window-sill { position: absolute; left: -16px; right: -16px; bottom: -14px; height: 14px; border-radius: 2px; background: linear-gradient(180deg, #ffffff, #e7e4de); box-shadow: 0 4px 6px rgba(0,0,0,.18); }
 .hdc-window-assembly { position: relative; flex: 0 0 auto; cursor: ns-resize; touch-action: none; user-select: none; transition: width .2s ease, height .2s ease; }
 .hdc-window-assembly:focus-visible { outline: 3px solid rgba(249,99,2,.5); outline-offset: 14px; }
-.hdc-window-large { position: absolute; inset: 0; border: 8px solid #c6c6c6; background: #fff; box-shadow: 0 3px 10px rgba(0,0,0,.22); overflow: hidden; }
+.hdc-window-large { position: absolute; inset: 0; border: 8px solid #f4f2ee; background: #fff; box-shadow: 0 0 0 6px #fbfaf7, 0 0 0 7px rgba(0,0,0,.08), 0 6px 18px rgba(0,0,0,.18), inset 0 0 0 1px rgba(0,0,0,.12), inset 0 6px 10px rgba(0,0,0,.12); overflow: hidden; }
 .hdc-shade-zone { position: absolute; z-index: 1; }
 .hdc-shade-zone.is-inside { top: 8px; bottom: 8px; left: calc(8px + 2%); right: calc(8px + 2%); }
 .hdc-shade-zone.is-outside { top: -18px; bottom: 0; left: -14px; right: -14px; }
@@ -14790,7 +14802,7 @@ button { cursor: pointer; }
 .hdc-motor-badge.is-right { right: -14px; }
 .hdc-motor-badge.is-left { left: -14px; }
 .hdc-drag-text { position: absolute; left: 50%; bottom: 10px; z-index: 7; transform: translateX(-50%); padding: 3px 10px; border-radius: 12px; background: rgba(0,0,0,.45); color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; pointer-events: none; }
-.hdc-size-tag { position: absolute; left: 10px; bottom: 10px; padding: 2px 8px; border-radius: 3px; background: rgba(255,255,255,.85); color: #333; font-size: 11px; font-weight: 700; }
+.hdc-size-tag { position: absolute; z-index: 2; left: 10px; bottom: 10px; padding: 2px 8px; border-radius: 3px; background: rgba(255,255,255,.85); color: #333; font-size: 11px; font-weight: 700; }
 .hdc-preview-note { margin: 8px 0 10px; color: #666; font-size: 11px; line-height: 1.35; }
 .hdc-show-preview { display: none; width: 100%; height: 40px; border: 1px solid #f96302; border-radius: 4px; background: #fff; color: #f96302; font-weight: 700; cursor: pointer; }
 .hdc-phone { display: none; }
