@@ -1699,8 +1699,13 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
 
   const productTitle = product.pdpTitle || product.detailTitle || product.name || "Custom Window Treatment";
   const brand = product.brand || "Levolor";
-  const salePrice = Number(product.price || product.pdpPrice || product.detailPrice || product.configuredPrice || 102.60);
-  const originalPrice = Number(product.was || product.pdpWas || product.detailWas || product.configuredWas || (salePrice / 0.6));
+  const baseSalePrice = Number(product.price || product.pdpPrice || product.detailPrice || product.configuredPrice || 102.60);
+  const baseOriginalPrice = Number(product.was || product.pdpWas || product.detailWas || product.configuredWas || (baseSalePrice / 0.6));
+  // A color's Add-on Price (e.g. "+$17.86") raises the sale and original price; savings % stays the same.
+  const colorUpcharge = selectedColor ? Math.max(0, toPriceNumber(String(selectedColor.adds || "").replace(/[^0-9.]/g, ""), 0)) : 0;
+  const colorPriceRatio = baseSalePrice > 0 ? (baseSalePrice + colorUpcharge) / baseSalePrice : 1;
+  const salePrice = baseSalePrice + colorUpcharge;
+  const originalPrice = baseOriginalPrice * colorPriceRatio;
   const savingsPct = originalPrice > salePrice ? Math.round(((originalPrice - salePrice) / originalPrice) * 100) : 0;
   const [originalDollars, originalCents] = money(originalPrice);
   const [saleDollars, saleCents] = money(salePrice);
@@ -1825,7 +1830,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
                     <span className="hdc-color-chip" style={{ background: option.swatchColor || "#f4f4f4" }}>
                       {option.swatchImageUrl ? <img src={imgSrc(option.swatchImageUrl)} alt="" /> : null}
                     </span>
-                    <span className="hdc-color-name">{option.title}{option.adds ? <em>{option.adds}</em> : null}</span>
+                    <span className="hdc-color-name">{option.title}{option.adds ? <em className="hdc-color-addon">{option.adds}</em> : null}</span>
                   </button>
                 );
               })}
@@ -2420,7 +2425,7 @@ function ConfiguratorSettingsEditor({ schema, setSchema, product = null, isEdite
                         <div className="config-option-fields">
                           <label>Title<input value={option.title || ""} onChange={(e) => updateOption(group.key, index, "title", e.target.value)} /></label>
                           <label>Original Price<input value={option.price || ""} onChange={(e) => updateOption(group.key, index, "price", e.target.value)} placeholder="Optional" /></label>
-                          <label>Add-on Price<input value={option.adds || ""} onChange={(e) => updateOption(group.key, index, "adds", e.target.value)} placeholder="Optional" /></label>
+                          <label>Add-on Price<input value={option.adds || ""} onChange={(e) => updateOption(group.key, index, "adds", e.target.value)} placeholder={group.key === "colorOptions" ? "e.g. +$17.86 (added to price)" : "Optional"} /></label>
                           <label className="wide">Description<textarea rows={2} value={option.description || ""} onChange={(e) => updateOption(group.key, index, "description", e.target.value)} /></label>
                           <label className="wide">Note<textarea rows={2} value={option.note || ""} onChange={(e) => updateOption(group.key, index, "note", e.target.value)} placeholder="Optional supporting note" /></label>
                           {group.key === "colorOptions" ? (
