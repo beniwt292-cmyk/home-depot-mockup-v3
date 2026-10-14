@@ -14456,17 +14456,18 @@ button { cursor: pointer; }
 
 /* Configurator color selection (tile grid like homedepot.com) */
 .hdc-color-group-title { font-size: 17px; font-weight: 400; color: #333; margin: 6px 0 18px; }
-.hdc-color-swatches { display: grid; grid-template-columns: repeat(4, 108px); gap: 8px; }
+.hdc-color-swatches { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
 .hdc-color-swatch { display: flex; flex-direction: column; padding: 0; background: #fff; border: 1px solid #d0d0d0; border-radius: 3px; box-shadow: 0 1px 2px rgba(0,0,0,.15); cursor: pointer; font: inherit; overflow: hidden; text-align: center; }
 .hdc-color-swatch:hover { border-color: #999; }
 .hdc-color-swatch:focus-visible { outline: 2px solid #f96302; outline-offset: 2px; }
 .hdc-color-swatch.active { border: 2px solid #f96302; }
-.hdc-color-chip { position: relative; display: block; width: 100%; height: 106px; overflow: hidden; }
+.hdc-color-chip { position: relative; display: block; width: 100%; height: auto; aspect-ratio: 1 / 1; overflow: hidden; }
 .hdc-color-chip::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(180deg, rgba(255,255,255,.10) 0 1px, rgba(0,0,0,.06) 1px 2px, transparent 2px 4px); pointer-events: none; }
 .hdc-color-chip img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: cover; display: block; }
 .hdc-color-name { display: flex; flex-direction: column; justify-content: center; min-height: 36px; padding: 5px 6px 6px; font-size: 11px; font-weight: 700; line-height: 1.3; color: #555; }
 .hdc-color-name em { font-style: normal; color: #f96302; }
 .hdc-color-description { margin: 10px 0 0; font-size: 13px; color: #555; }
+@media (max-width: 900px) { .hdc-color-swatches { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .hdc-color-swatches { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .config-swatch-color-field { display: flex; gap: 6px; align-items: center; }
 .config-swatch-color-field input[type="color"] { width: 38px; min-width: 38px; height: 34px; padding: 2px; }
