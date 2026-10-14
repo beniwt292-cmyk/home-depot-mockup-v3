@@ -14456,7 +14456,7 @@ button { cursor: pointer; }
 
 /* Configurator color selection (tile grid like homedepot.com) */
 .hdc-color-group-title { font-size: 17px; font-weight: 400; color: #333; margin: 6px 0 18px; }
-.hdc-color-swatches { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.hdc-color-swatches { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .hdc-color-swatch { display: flex; flex-direction: column; padding: 0; background: #fff; border: 1px solid #d0d0d0; border-radius: 3px; box-shadow: 0 1px 2px rgba(0,0,0,.15); cursor: pointer; font: inherit; overflow: hidden; text-align: center; }
 .hdc-color-swatch:hover { border-color: #999; }
 .hdc-color-swatch:focus-visible { outline: 2px solid #f96302; outline-offset: 2px; }
