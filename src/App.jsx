@@ -14771,7 +14771,9 @@ button { cursor: pointer; }
 .hdc-window-assembly:focus-visible { outline: 3px solid rgba(249,99,2,.5); outline-offset: 14px; }
 .hdc-window-large { position: absolute; inset: 0; border: 8px solid #f4f2ee; background: #fff; box-shadow: 0 0 0 6px #fbfaf7, 0 0 0 7px rgba(0,0,0,.08), 0 6px 18px rgba(0,0,0,.18), inset 0 0 0 1px rgba(0,0,0,.12), inset 0 6px 10px rgba(0,0,0,.12); overflow: hidden; }
 .hdc-shade-zone { position: absolute; z-index: 1; }
-.hdc-shade-zone.is-inside { top: 8px; bottom: 8px; left: calc(8px + 2%); right: calc(8px + 2%); }
+.hdc-shade-zone.is-inside { top: 8px; bottom: 8px; left: 10px; right: 10px; }
+.hdc-shade-zone.is-inside .hdc-shade-large.is-roller { left: 3px; right: 3px; }
+.hdc-shade-zone.is-inside .hdc-shade-large.is-roller.is-reverse { left: 1px; right: 1px; }
 .hdc-shade-zone.is-outside { top: -18px; bottom: 0; left: -14px; right: -14px; }
 .hdc-shade-large { position: absolute; left: 0; right: 0; z-index: 1; transition: height .12s ease-out; }
 .hdc-shade-large.is-cellular { top: 10px; display: flex; flex-direction: column; justify-content: flex-end; background: var(--hdc-fabric); border-bottom: 5px solid rgba(0,0,0,.28); }
