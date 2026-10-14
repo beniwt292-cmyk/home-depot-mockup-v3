@@ -3945,12 +3945,21 @@ export default function App() {
   // Auto-save shared grid/editor settings so all viewers see the same mockup mode.
   useEffect(() => {
     if (!products.length) return;
-    const timer = window.setTimeout(() => {
-      fetch(FUNCTION_PRODUCTS_URL, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(applyMockupSettingsToProducts(products, mockupSettings))
-      }).catch((error) => console.error("Could not auto-save mockup settings", error));
+    const timer = window.setTimeout(async () => {
+      try {
+        // Re-read the latest saved products first so a stale open tab never overwrites newer edits.
+        const latestRes = await fetch(FUNCTION_PRODUCTS_URL, { cache: "no-store" });
+        const latestPayload = latestRes.ok ? await latestRes.json() : null;
+        const latest = Array.isArray(latestPayload) ? latestPayload : latestPayload?.products;
+        if (!Array.isArray(latest) || !latest.length) return;
+        await fetch(FUNCTION_PRODUCTS_URL, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(applyMockupSettingsToProducts(latest, mockupSettings))
+        });
+      } catch (error) {
+        console.error("Could not auto-save mockup settings", error);
+      }
     }, 650);
     return () => window.clearTimeout(timer);
   }, [mockupSettings]);
