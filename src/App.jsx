@@ -139,7 +139,8 @@ function parseAppRoute(path) {
 
   const parts = clean.split("/").filter(Boolean);
   if (parts[0] === "window-treatments" && parts[1] === "product" && parts[2]) {
-    const productModel = decodeURIComponent(parts[2]);
+    let productModel;
+    try { productModel = decodeURIComponent(parts[2]); } catch { productModel = parts[2]; }
     if (parts.length === 3) return { type: "product", path: clean, productModel };
     if (parts.length === 4 && parts[3] === "configure") return { type: "configurator", path: clean, productModel };
   }
@@ -2704,7 +2705,48 @@ function ConfiguratorSettingsEditor({ schema, setSchema, product = null, isEdite
   );
 }
 
+// Keep keyboard focus and scrolling inside an open modal, then restore both.
+function useModalBehavior(onClose, selector) {
+  useEffect(() => {
+    const panel = document.querySelector(selector);
+    if (!panel) return undefined;
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusable = () => [...panel.querySelectorAll('button, a[href], input, select, textarea, [tabindex="0"]')]
+      .filter((element) => !element.disabled && element.getClientRects().length);
+    focusable()[0]?.focus({ preventScroll: true });
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        // Let a section menu handle the first Escape, without dismissing the editor.
+        if (panel.querySelector('.config-more-button[aria-expanded="true"]')) return;
+        event.preventDefault();
+        onClose();
+      }
+      if (event.key === "Tab") {
+        const elements = focusable();
+        const first = elements[0];
+        const last = elements[elements.length - 1];
+        if (!first) { event.preventDefault(); return; }
+        if (event.shiftKey && (document.activeElement === first || !panel.contains(document.activeElement))) {
+          event.preventDefault(); last.focus();
+        } else if (!event.shiftKey && (document.activeElement === last || !panel.contains(document.activeElement))) {
+          event.preventDefault(); first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
+    // Mount/unmount owns the modal lifecycle. Callers pass inline close callbacks.
+  }, []);
+}
+
 function EditorPanel({ products, displayProducts, editorMode = "grid", setProducts, onClose, saveProducts, saveStatus, reloadProducts, placeholderNonBordered, setPlaceholderNonBordered, mockupSettings, setMockupSettings, bannerPresets = [], bannerPresetStatus = "", saveBannerPreset, loadBannerPreset, deleteBannerPreset, renameBannerPreset, reloadBannerPresets }) {
+  useModalBehavior(onClose, ".editor-panel");
   const [newPresetName, setNewPresetName] = useState("");
   const [uploading, setUploading] = useState("");
   const [galleryDragging, setGalleryDragging] = useState(null);
@@ -3406,7 +3448,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
   if (isConfiguratorEditor) {
     return (
       <div className="editor-overlay editor-overlay-product" onClick={onClose}>
-        <div className="editor-panel editor-panel-product editor-panel-configurator" onClick={(e) => e.stopPropagation()}>
+        <div className="editor-panel editor-panel-product editor-panel-configurator" role="dialog" aria-modal="true" aria-label="Configurator Editor" onClick={(e) => e.stopPropagation()}>
           <div className="editor-sticky-top">
             <div className="editor-header">
               <div>
@@ -3789,10 +3831,11 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
   );
 }
 
-function QuickViewModal({ product, onClose }) {
+function QuickViewModal({ product, onClose, onOpenProduct }) {
+  useModalBehavior(onClose, ".quick-panel");
   const [mode, setMode] = useState("primary");
   const imageToShow = mode === "hover" ? product.hoverImageUrl : product.imageUrl;
-  return <div className="quick-overlay" onClick={onClose}><div className="quick-panel" onClick={(e) => e.stopPropagation()}><div className="quick-head"><b>Quick View Mockup</b><button onClick={onClose}><X size={20} /></button></div><div className="quick-grid"><div className="quick-image">{imageToShow ? <img src={imgSrc(imageToShow)} alt={product.name} /> : <div className="missing-image">Image Needed</div>}</div><div><div className="quick-tabs"><button className={mode === "primary" ? "active" : ""} onClick={() => setMode("primary")}>Primary Image</button><button className={mode === "hover" ? "active" : ""} onClick={() => setMode("hover")}>Hover Image</button></div><Rating rating={product.rating} reviews={product.reviews} /><h2>{product.brand} {product.name}</h2><p>Model# {product.model}</p><button className="build-button">Build and Buy</button></div></div></div></div>;
+  return <div className="quick-overlay" onClick={onClose}><div className="quick-panel" role="dialog" aria-modal="true" aria-label="Quick view" onClick={(e) => e.stopPropagation()}><div className="quick-head"><b>Quick View Mockup</b><button onClick={onClose} aria-label="Close quick view"><X size={20} /></button></div><div className="quick-grid"><div className="quick-image">{imageToShow ? <img src={imgSrc(imageToShow)} alt={product.name} /> : <div className="missing-image">Image Needed</div>}</div><div><div className="quick-tabs"><button className={mode === "primary" ? "active" : ""} onClick={() => setMode("primary")}>Primary Image</button><button className={mode === "hover" ? "active" : ""} onClick={() => setMode("hover")}>Hover Image</button></div><Rating rating={product.rating} reviews={product.reviews} /><h2>{product.brand} {product.name}</h2><p>Model# {product.model}</p><button className="build-button" onClick={() => { onClose(); onOpenProduct(product); }}>View Product</button></div></div></div></div>;
 }
 
 
@@ -4746,7 +4789,7 @@ export default function App() {
         </>}
       </main>
       {editorOpen && <EditorPanel products={products} displayProducts={configuratorProduct ? [configuratorProduct] : selectedProduct ? [selectedProduct] : filteredProducts} editorMode={configuratorProduct ? "configurator" : selectedProduct ? "product" : showCategoryPage ? "category" : "grid"} setProducts={setProducts} onClose={() => setEditorOpen(false)} saveProducts={saveProducts} saveStatus={saveStatus} reloadProducts={loadProducts} placeholderNonBordered={placeholderNonBordered} setPlaceholderNonBordered={setPlaceholderNonBordered} mockupSettings={mockupSettings} setMockupSettings={setMockupSettings} bannerPresets={bannerPresets} bannerPresetStatus={bannerPresetStatus} saveBannerPreset={saveBannerPreset} loadBannerPreset={loadBannerPreset} deleteBannerPreset={deleteBannerPreset} renameBannerPreset={renameBannerPreset} reloadBannerPresets={loadBannerPresets} />}
-      {quickView && <QuickViewModal product={quickView} onClose={() => setQuickView(null)} />}
+      {quickView && <QuickViewModal product={quickView} onClose={() => setQuickView(null)} onOpenProduct={openProductPage} />}
     </div>
   );
 }
@@ -15066,7 +15109,8 @@ button { cursor: pointer; }
 @media (max-width: 1100px) { .hd-cat-title-grid .hd-grid-tools { justify-self: start !important; width: auto !important; flex-wrap: wrap; } }
 @media (max-width: 640px) { .hd-cat-title-grid .hd-grid-tools { width: 100% !important; } .hd-grid-tools-label { width: 100%; } }
 
-.editor-accordion-section { overflow: hidden; }
+.editor-accordion-section { overflow: visible; }
+.editor-accordion-section .editor-accordion-heading { border-radius: 18px; }
 .config-product-summary .editor-compact-main { min-width: 0; flex: 1; }
 .config-editor-product-title strong { text-transform: none !important; letter-spacing: 0 !important; font-size: 18px !important; line-height: 1.25 !important; max-width: none !important; }
 .config-product-summary .editor-compact-meta { flex-wrap: wrap; }
@@ -15079,5 +15123,16 @@ button { cursor: pointer; }
 .editor-overlay-product .editor-card.apple-editor-card.editor-card-expanded .editor-compact-summary.config-product-summary { grid-template-columns: 88px minmax(0, 1fr) !important; }
 .config-product-summary .editor-compact-main { max-width: none !important; width: 100% !important; }
 .config-section-visibility-row > .config-hide-section-button { height: 32px !important; min-width: 84px !important; padding: 0 12px !important; border-radius: 999px !important; font-size: 12px !important; font-weight: 700 !important; display: inline-flex !important; align-items: center; justify-content: center; }
+
+/* Keep the stock gallery within narrow phone viewports. */
+@media (max-width: 760px) {
+  .pdp-stock-grid .pdp-stock-gallery-panel,
+  .pdp-stock-grid .pdp-stock-gallery-layout,
+  .pdp-stock-grid .pdp-stock-hero-shell,
+  .pdp-stock-grid .pdp-stock-hero-stage { min-width: 0 !important; max-width: 100% !important; }
+  .pdp-stock-grid .pdp-stock-hero-stage { width: 100% !important; }
+  .config-section-visibility-row { flex-wrap: wrap; gap: 10px; }
+  .config-section-visibility-actions { flex-wrap: wrap; }
+}
 
 `;
