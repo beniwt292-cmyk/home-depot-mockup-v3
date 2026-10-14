@@ -1,0 +1,8 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/.netlify/functions/:path*", "destination": "https://thdtesting.netlify.app/.netlify/functions/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
