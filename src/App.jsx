@@ -2003,7 +2003,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
               <div className="hdc-side-price"><s>${originalDollars}.{originalCents}</s><b>{savingsPct ? `Save ${savingsPct}%` : ""}</b><strong>${saleDollars}.{saleCents}</strong><small>Price Includes Options</small></div>
             </div>
             <div className="hdc-preview-title"><span>New</span> Enhanced Product Preview</div>
-            <div className="hdc-preview-stage" style={selectedPaint?.hex ? { background: selectedPaint.hex } : undefined}>
+            <div className={selectedPaint?.hex ? "hdc-preview-stage has-wall-paint" : "hdc-preview-stage"} style={selectedPaint?.hex ? { "--hdc-wall-paint": selectedPaint.hex } : undefined}>
               <button type="button" className="hdc-zoom">Zoom In</button>
               <div className="hdc-window-large" aria-label="Product preview placeholder">
                 <div className="hdc-shade-large" style={selectedColorSwatch ? { background: selectedColorSwatch } : undefined}>{Array.from({ length: 18 }).map((_, index) => <span key={index} style={selectedColorSwatch ? { background: `linear-gradient(180deg, rgba(255,255,255,.45), rgba(0,0,0,.18) 60%, rgba(255,255,255,.25)), ${selectedColorSwatch}` } : undefined} />)}</div>
@@ -14591,6 +14591,7 @@ button { cursor: pointer; }
 .config-paint-fieldset { display: grid; gap: 6px; margin: 8px 0 0; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; }
 .config-paint-fieldset legend { display: flex; align-items: center; gap: 6px; padding: 0 4px; font-size: 12px; font-weight: 700; }
 .config-paint-dot { display: inline-block; width: 14px; height: 14px; border: 1px solid rgba(0,0,0,.2); border-radius: 50%; }
+.hdc-preview-stage.has-wall-paint { background: var(--hdc-wall-paint) !important; }
 .hdc-paint-pairing { display: grid; gap: 18px; margin-bottom: 18px; }
 .hdc-step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-right: 8px; border-radius: 50%; background: #f96302; color: #fff; font-size: 12px; font-weight: 700; vertical-align: 1px; }
 .hdc-paint-subtitle { margin: 0 0 10px; font-size: 13px; color: #555; }
