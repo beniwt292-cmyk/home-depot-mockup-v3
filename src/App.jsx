@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Search, ShoppingCart, User, Menu, Heart, Star, Grid, List, Truck,
   Pencil, Eye, Plus, Trash2, RotateCcw, Store, Home, ChevronRight,
@@ -2121,17 +2122,13 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
               <p>Based on your selections</p>
               <div className="hdc-side-price"><s>${originalDollars}.{originalCents}</s><b>{savingsPct ? `Save ${savingsPct}%` : ""}</b><strong>${saleDollars}.{saleCents}</strong><small>Price Includes Options</small></div>
             </div>
-            <div className="hdc-preview-title"><span>New</span> Enhanced Product Preview</div>
-            <div className={selectedPaint?.hex ? "hdc-preview-stage has-wall-paint" : "hdc-preview-stage"} style={selectedPaint?.hex ? { "--hdc-wall-paint": selectedPaint.hex } : undefined}>
-              <button type="button" className="hdc-zoom">Zoom In</button>
-              <div className="hdc-window-large" aria-label="Product preview placeholder">
-                <div className="hdc-shade-large" style={selectedColorSwatch ? { background: selectedColorSwatch } : undefined}>{Array.from({ length: 18 }).map((_, index) => <span key={index} style={selectedColorSwatch ? { background: `linear-gradient(180deg, rgba(255,255,255,.45), rgba(0,0,0,.18) 60%, rgba(255,255,255,.25)), ${selectedColorSwatch}` } : undefined} />)}</div>
-                <div className="hdc-outdoor-view"><i /><i /></div>
-                <div className="hdc-drag-text">Drag Image</div>
-              </div>
-            </div>
-            <p className="hdc-preview-note">Image for preview purposes only. Some options will not appear but will be made according to your selections.</p>
-            <button type="button" className="hdc-show-preview">Show Preview</button>
+            <EnhancedProductPreview
+              isRoller={String(product?.category || "").toLowerCase().includes("roller")}
+              colorSwatch={selectedColorSwatch}
+              colorName={selectedColor?.title || ""}
+              wallPaint={selectedPaint?.hex || ""}
+              reverseRoll={config["custom_fabric-roll-direction"] === "Reverse Roll"}
+            />
             <div className="hdc-phone">Need help? <strong>800-921-2119</strong></div>
           </section>
         </aside>
@@ -2140,6 +2137,104 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
   );
 }
 
+
+function PreviewScene({ isRoller, colorSwatch, wallPaint, reverseRoll, lowered, setLowered, large = false }) {
+  const windowRef = useRef(null);
+  const dragging = useRef(false);
+  const setFromPointer = (event) => {
+    const rect = windowRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const ratio = (event.clientY - rect.top) / rect.height;
+    setLowered(Math.min(1, Math.max(0.08, ratio)));
+  };
+  const onPointerDown = (event) => {
+    dragging.current = true;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setFromPointer(event);
+  };
+  const onPointerMove = (event) => { if (dragging.current) setFromPointer(event); };
+  const onPointerUp = () => { dragging.current = false; };
+  const onKeyDown = (event) => {
+    if (event.key === "ArrowUp") { event.preventDefault(); setLowered((v) => Math.max(0.08, v - 0.1)); }
+    if (event.key === "ArrowDown") { event.preventDefault(); setLowered((v) => Math.min(1, v + 0.1)); }
+  };
+  const fabric = colorSwatch || "#e7e7e2";
+  const pleatCount = Math.max(3, Math.round(lowered * 22));
+  return (
+    <div className={`hdc-preview-stage${large ? " is-large" : ""}${wallPaint ? " has-wall-paint" : ""}`} style={wallPaint ? { "--hdc-wall-paint": wallPaint } : undefined}>
+      <div
+        ref={windowRef}
+        className={`hdc-window-large${isRoller ? " is-roller" : ""}`}
+        role="slider"
+        tabIndex={0}
+        aria-label="Drag up or down to raise or lower the shade"
+        aria-valuemin={8}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(lowered * 100)}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onKeyDown={onKeyDown}
+      >
+        <div className="hdc-outdoor-view"><i /><i /></div>
+        {isRoller ? (
+          <>
+            <div className={`hdc-roller-tube${reverseRoll ? " is-reverse" : ""}`} style={{ "--hdc-fabric": fabric }} />
+            <div className={`hdc-shade-large is-roller${reverseRoll ? " is-reverse" : ""}`} style={{ height: `${lowered * 100}%`, "--hdc-fabric": fabric }}>
+              <span className="hdc-hem-bar" />
+            </div>
+          </>
+        ) : (
+          <div className="hdc-shade-large is-cellular" style={{ height: `${lowered * 100}%`, "--hdc-fabric": fabric }}>
+            {Array.from({ length: pleatCount }).map((_, index) => <span key={index} />)}
+          </div>
+        )}
+        <div className="hdc-drag-text" aria-hidden="true"><span>&#8597;</span> Drag Image</div>
+      </div>
+    </div>
+  );
+}
+
+function EnhancedProductPreview({ isRoller, colorSwatch, colorName, wallPaint, reverseRoll }) {
+  const [lowered, setLowered] = useState(0.7);
+  const [zoomed, setZoomed] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const sceneProps = { isRoller, colorSwatch, wallPaint, reverseRoll, lowered, setLowered };
+  return (
+    <>
+      <div className="hdc-preview-title"><span>New</span> Enhanced Product Preview</div>
+      {collapsed ? null : (
+        <div className="hdc-preview-frame">
+          <button type="button" className="hdc-zoom" onClick={() => setZoomed(true)}>Zoom In</button>
+          <PreviewScene {...sceneProps} />
+        </div>
+      )}
+      {collapsed ? null : <p className="hdc-preview-note">Image for preview purposes only. Some options will not appear but will be made according to your selections.</p>}
+      <button type="button" className="hdc-show-preview" aria-expanded={!collapsed} onClick={() => setCollapsed((v) => !v)}>
+        {collapsed ? "Show Preview" : "Hide Preview"}
+      </button>
+      {zoomed ? <PreviewZoom onClose={() => setZoomed(false)} colorName={colorName} sceneProps={sceneProps} /> : null}
+    </>
+  );
+}
+
+function PreviewZoom({ onClose, colorName, sceneProps }) {
+  useModalBehavior(onClose, ".hdc-zoom-panel");
+  return createPortal(
+    <div className="hdc-zoom-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div className="hdc-zoom-panel" role="dialog" aria-modal="true" aria-label="Enlarged product preview">
+        <div className="hdc-zoom-head">
+          <strong>{colorName ? `Shown in ${colorName}` : "Product Preview"}</strong>
+          <button type="button" className="hdc-zoom-close" onClick={onClose} aria-label="Close enlarged preview">&times;</button>
+        </div>
+        <PreviewScene {...sceneProps} large />
+        <p className="hdc-preview-note">Drag the image up or down to raise or lower the shade.</p>
+      </div>
+    </div>,
+    document.body
+  );
+}
 
 function ConfiguratorSettingsEditor({ schema, setSchema, product = null, isEdited = false }) {
   const safeSchema = mergeConfiguratorSchema(schema);
@@ -8890,108 +8985,6 @@ button { cursor: pointer; }
   font-size: 26px;
   font-weight: 700;
 }
-.hdc-preview-title {
-  margin-top: 12px;
-  color: #555;
-  font-size: 13px;
-}
-.hdc-preview-title span {
-  background: #ffd800;
-  color: #333;
-  display: inline-block;
-  padding: 2px 5px;
-  margin-right: 6px;
-  font-size: 11px;
-  font-weight: 700;
-}
-.hdc-preview-stage {
-  position: relative;
-  height: 330px;
-  margin-top: 10px;
-  background: #d8d8d8;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.hdc-zoom {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  height: 28px;
-  border: 2px solid #f96302;
-  background: #fff;
-  color: #f96302;
-  font-size: 11px;
-  font-weight: 700;
-  z-index: 2;
-}
-.hdc-window-large {
-  position: relative;
-  width: 270px;
-  height: 236px;
-  border: 8px solid #c6c6c6;
-  background: #fff;
-  box-shadow: 0 2px 9px rgba(0,0,0,.2);
-  overflow: hidden;
-}
-.hdc-shade-large {
-  position: absolute;
-  inset: 0 0 92px;
-  background: #e7e7e2;
-  padding-top: 8px;
-  border-bottom: 4px solid #999;
-}
-.hdc-shade-large span {
-  display: block;
-  height: 6px;
-  margin-bottom: 3px;
-  background: linear-gradient(180deg, #fff, #b6bab4 60%, #ededeb);
-  border-bottom: 1px solid rgba(0,0,0,.16);
-}
-.hdc-outdoor-view {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 92px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  background: linear-gradient(180deg, #f8fbff, #ddeddd);
-}
-.hdc-outdoor-view i {
-  border-right: 4px solid #d8d8d8;
-  background: radial-gradient(circle at 50% 75%, #a9d09b 0 18%, transparent 19%), linear-gradient(180deg, #f8fbff, #dfeede);
-}
-.hdc-drag-text {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: rgba(0,0,0,.28);
-  font-size: 13px;
-  font-weight: 700;
-  pointer-events: none;
-}
-.hdc-preview-note {
-  margin: 10px 0;
-  color: #666;
-  font-size: 11px;
-  line-height: 1.35;
-}
-.hdc-show-preview {
-  width: 100%;
-  height: 40px;
-  border: 1px solid #f96302;
-  background: #fff;
-  color: #f96302;
-  font-weight: 700;
-}
-.hdc-phone {
-  margin-top: 10px;
-  font-size: 13px;
-  color: #333;
-  text-align: center;
-}
 @media (max-width: 980px) {
   .hdc-layout { grid-template-columns: 1fr; }
   .hdc-right { position: static; padding-top: 0; }
@@ -9307,53 +9300,6 @@ button { cursor: pointer; }
 .hdc-side-price small {
   font-size: 11px !important;
 }
-.hdc-preview-title {
-  margin: 16px 0 8px !important;
-  font-size: 16px !important;
-  color: #666 !important;
-}
-.hdc-preview-title span {
-  padding: 7px 9px !important;
-  border-radius: 4px;
-  background: #ffd327 !important;
-  font-size: 16px !important;
-  color: #333;
-}
-.hdc-preview-stage {
-  height: 548px !important;
-  background: #d4d4d4 !important;
-  margin-top: 0 !important;
-}
-.hdc-window-large {
-  width: 360px !important;
-  height: 430px !important;
-  border-width: 9px !important;
-  box-shadow: 0 3px 12px rgba(0,0,0,.25) !important;
-}
-.hdc-shade-large {
-  bottom: 126px !important;
-}
-.hdc-shade-large span {
-  height: 8px !important;
-  margin-bottom: 4px !important;
-}
-.hdc-outdoor-view {
-  height: 126px !important;
-}
-.hdc-zoom {
-  top: 10px !important;
-  right: 10px !important;
-  height: 31px !important;
-  border: 2px solid #f96302 !important;
-  color: #f96302 !important;
-  font-size: 14px !important;
-}
-.hdc-drag-text,
-.hdc-preview-note,
-.hdc-show-preview,
-.hdc-phone {
-  display: none !important;
-}
 @media (max-width: 1120px) {
   .hdc-layout { grid-template-columns: 1fr !important; }
   .hdc-right { position: static !important; }
@@ -9365,8 +9311,6 @@ button { cursor: pointer; }
   .hdc-option-media { width: 100% !important; }
   .hdc-preview-summary { padding-right: 0; }
   .hdc-side-price { position: static; text-align: left; margin-top: 10px !important; }
-  .hdc-preview-stage { height: 390px !important; }
-  .hdc-window-large { width: 280px !important; height: 330px !important; }
 }
 
 
@@ -9440,17 +9384,6 @@ button { cursor: pointer; }
 .hdc-preview-summary {
   min-height: 112px !important;
   padding-right: 150px !important;
-}
-.hdc-preview-stage {
-  width: 100% !important;
-  height: 548px !important;
-}
-.hdc-window-large {
-  width: 360px !important;
-  height: 430px !important;
-}
-.hdc-preview-title {
-  margin-top: 10px !important;
 }
 .hdc-review-card {
   margin-top: 0 !important;
@@ -9771,24 +9704,6 @@ button { cursor: pointer; }
 .hdc-side-price strong { display: block !important; color: #333 !important; font-size: 30px !important; line-height: .95 !important; font-weight: 700 !important; }
 .hdc-side-price strong::before,
 .hdc-side-price strong::after { content: none !important; display: none !important; }
-.hdc-preview-title { margin: 12px 0 7px !important; color: #666 !important; font-size: 14px !important; }
-.hdc-preview-title span {
-  display: inline-flex !important; align-items: center !important; min-height: 26px !important; margin-right: 6px !important; padding: 4px 8px !important;
-  border-radius: 3px !important; background: #ffd42a !important; color: #333 !important; font-size: 13px !important; font-weight: 700 !important;
-}
-.hdc-preview-stage {
-  position: relative !important; width: 100% !important; height: min(430px, 42vw) !important; min-height: 360px !important; margin: 0 !important;
-  display: flex !important; align-items: center !important; justify-content: center !important; overflow: hidden !important; background: #cfcfcf !important;
-}
-.hdc-window-large { width: min(286px, 58%) !important; height: min(360px, calc(100% - 42px)) !important; border-width: 7px !important; box-shadow: 0 3px 10px rgba(0,0,0,.22) !important; }
-.hdc-shade-large { bottom: 106px !important; }
-.hdc-shade-large span { height: 7px !important; margin-bottom: 3px !important; }
-.hdc-outdoor-view { height: 106px !important; }
-.hdc-zoom { position: absolute !important; top: 10px !important; right: 10px !important; height: 31px !important; padding: 0 10px !important; border: 2px solid #f96302 !important; background: #fff !important; color: #f96302 !important; font-size: 12px !important; font-weight: 700 !important; }
-.hdc-drag-text,
-.hdc-preview-note,
-.hdc-show-preview,
-.hdc-phone { display: none !important; }
 .hdc-review-card { order: 2 !important; display: block !important; width: 100% !important; margin: 2px 0 0 !important; padding: 14px !important; border: 1px solid #d6d6d6 !important; border-radius: 0 !important; background: #fff !important; }
 .hdc-review-card h2 { margin: 0 0 10px !important; padding-bottom: 7px !important; border-bottom: 1px solid #ccc !important; color: #333 !important; font-size: 17px !important; line-height: 1.2 !important; font-weight: 700 !important; }
 .hdc-review-rows { display: grid !important; border-bottom: 1px solid #e0e0e0 !important; margin-bottom: 12px !important; }
@@ -9818,7 +9733,6 @@ button { cursor: pointer; }
   .hdc-layout { width: min(100% - 32px, 900px) !important; }
   .hdc-layout { grid-template-columns: minmax(0, 1fr) !important; gap: 24px !important; }
   .hdc-right { position: static !important; }
-  .hdc-preview-stage { height: 430px !important; }
 }
 @media (max-width: 700px) {
   .hdc-page { padding-bottom: 48px !important; overflow-x: hidden !important; }
@@ -9841,7 +9755,6 @@ button { cursor: pointer; }
   .hdc-measure-selects { flex-wrap: wrap !important; }
   .hdc-preview-summary { padding-right: 0 !important; }
   .hdc-side-price { position: static !important; width: auto !important; margin-top: 10px !important; text-align: left !important; }
-  .hdc-preview-stage { height: 390px !important; min-height: 340px !important; }
 }
 @media (max-width: 520px) {
   .hdc-option-card { grid-template-columns: 1fr !important; gap: 10px !important; }
@@ -9850,10 +9763,6 @@ button { cursor: pointer; }
   .hdc-mini-art i { left: 50% !important; width: 126px !important; transform: translateX(-50%) !important; }
   .hdc-option-stack.no-media .hdc-option-card,
   .hdc-option-stack.compact .hdc-option-card { grid-template-columns: 22px minmax(0, 1fr) !important; }
-  .hdc-preview-stage { height: 340px !important; min-height: 320px !important; }
-  .hdc-window-large { width: 250px !important; max-width: 78% !important; height: 290px !important; }
-  .hdc-shade-large { bottom: 86px !important; }
-  .hdc-outdoor-view { height: 86px !important; }
 }
 
 
@@ -14760,7 +14669,47 @@ button { cursor: pointer; }
 .config-paint-fieldset { display: grid; gap: 6px; margin: 8px 0 0; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; }
 .config-paint-fieldset legend { display: flex; align-items: center; gap: 6px; padding: 0 4px; font-size: 12px; font-weight: 700; }
 .config-paint-dot { display: inline-block; width: 14px; height: 14px; border: 1px solid rgba(0,0,0,.2); border-radius: 50%; }
-.hdc-preview-stage.has-wall-paint { background: var(--hdc-wall-paint) !important; }
+/* Enhanced Product Preview (single source of truth) */
+.hdc-preview-title { margin: 12px 0 7px; color: #666; font-size: 14px; }
+.hdc-preview-title span { display: inline-block; margin-right: 6px; padding: 2px 6px; border-radius: 3px; background: #f96302; color: #fff; font-size: 11px; font-weight: 700; text-transform: uppercase; vertical-align: 1px; }
+.hdc-preview-frame { position: relative; }
+.hdc-preview-stage { position: relative; display: flex; align-items: center; justify-content: center; height: 470px; background: #d8d8d8; overflow: hidden; }
+.hdc-preview-stage.has-wall-paint { background: var(--hdc-wall-paint); }
+.hdc-preview-stage.is-large { height: min(72vh, 680px); }
+.hdc-zoom { position: absolute; top: 10px; right: 10px; z-index: 3; height: 32px; padding: 0 12px; border: 2px solid #f96302; border-radius: 4px; background: #fff; color: #f96302; font-size: 12px; font-weight: 700; cursor: pointer; }
+.hdc-zoom:hover { background: #fff4ec; }
+.hdc-window-large { position: relative; width: min(286px, 62%); height: min(370px, calc(100% - 60px)); border: 8px solid #c6c6c6; background: #fff; box-shadow: 0 3px 10px rgba(0,0,0,.22); overflow: hidden; cursor: ns-resize; touch-action: none; user-select: none; }
+.is-large .hdc-window-large { width: min(440px, 80%); height: calc(100% - 70px); }
+.hdc-window-large:focus-visible { outline: 3px solid rgba(249,99,2,.5); outline-offset: 3px; }
+.hdc-outdoor-view { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; }
+.hdc-outdoor-view i { border-right: 4px solid #c6c6c6; background: radial-gradient(ellipse at 50% 92%, #9cc78d 0 22%, transparent 23%), linear-gradient(180deg, #eaf4ff 0%, #f8fbff 55%, #dcebd9 100%); }
+.hdc-outdoor-view i:last-child { border-right: 0; }
+.hdc-shade-large { position: absolute; top: 0; left: 0; right: 0; z-index: 1; transition: height .12s ease-out; }
+.hdc-shade-large.is-cellular { display: flex; flex-direction: column; justify-content: flex-end; background: var(--hdc-fabric); border-bottom: 5px solid rgba(0,0,0,.28); overflow: hidden; }
+.hdc-shade-large.is-cellular span { flex: 0 0 auto; height: 14px; background: linear-gradient(180deg, rgba(255,255,255,.45), rgba(0,0,0,.18) 60%, rgba(255,255,255,.25)), var(--hdc-fabric); border-bottom: 1px solid rgba(0,0,0,.16); }
+.hdc-roller-tube { position: absolute; top: 0; left: 0; right: 0; z-index: 2; height: 16px; background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(0,0,0,.25)), var(--hdc-fabric); box-shadow: 0 2px 3px rgba(0,0,0,.25); }
+.hdc-roller-tube.is-reverse { box-shadow: 0 2px 3px rgba(0,0,0,.25), inset 0 -3px 0 rgba(0,0,0,.18); }
+.hdc-shade-large.is-roller { top: 8px; left: 4%; right: 4%; background: linear-gradient(90deg, rgba(0,0,0,.06), rgba(255,255,255,.08) 50%, rgba(0,0,0,.06)), var(--hdc-fabric); box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+.hdc-shade-large.is-roller.is-reverse { left: 2%; right: 2%; z-index: 3; }
+.hdc-hem-bar { position: absolute; left: -2px; right: -2px; bottom: -6px; height: 8px; border-radius: 2px; background: linear-gradient(180deg, #e6e6e6, #9a9a9a); box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.hdc-drag-text { position: absolute; left: 50%; bottom: 10px; z-index: 4; transform: translateX(-50%); padding: 3px 10px; border-radius: 12px; background: rgba(0,0,0,.45); color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; pointer-events: none; }
+.hdc-preview-note { margin: 8px 0 10px; color: #666; font-size: 11px; line-height: 1.35; }
+.hdc-show-preview { display: none; width: 100%; height: 40px; border: 1px solid #f96302; border-radius: 4px; background: #fff; color: #f96302; font-weight: 700; cursor: pointer; }
+.hdc-phone { display: none; }
+.hdc-zoom-backdrop { position: fixed; inset: 0; z-index: 10000; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; display: grid; place-items: center; padding: 20px; background: rgba(0,0,0,.6); }
+.hdc-zoom-panel { width: min(760px, 100%); padding: 14px 16px 6px; border-radius: 6px; background: #fff; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
+.hdc-zoom-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: #333; font-size: 15px; }
+.hdc-zoom-close { width: 34px; height: 34px; border: 1px solid #ccc; border-radius: 50%; background: #fff; color: #333; font-size: 22px; line-height: 1; cursor: pointer; }
+.hdc-zoom-close:hover { border-color: #f96302; color: #f96302; }
+@media (max-width: 1180px) { .hdc-preview-stage { height: 430px; } }
+@media (max-width: 700px) {
+  .hdc-preview-stage { height: 380px; }
+  .hdc-show-preview { display: block; }
+}
+@media (max-width: 520px) {
+  .hdc-preview-stage { height: 330px; }
+  .hdc-window-large { width: 240px; max-width: 78%; }
+}
 .hdc-paint-pairing { display: grid; gap: 18px; margin-bottom: 18px; }
 .hdc-step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-right: 8px; border-radius: 50%; background: #f96302; color: #fff; font-size: 12px; font-weight: 700; vertical-align: 1px; }
 .hdc-paint-subtitle { margin: 0 0 10px; font-size: 13px; color: #555; }
