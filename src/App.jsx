@@ -2147,6 +2147,14 @@ function ConfiguratorSettingsEditor({ schema, setSchema, product = null, isEdite
   const [openConfigSections, setOpenConfigSections] = useState({});
   const [openOptionRows, setOpenOptionRows] = useState({});
   const [openResetMenu, setOpenResetMenu] = useState("");
+  useEffect(() => {
+    if (!openResetMenu) return undefined;
+    const closeOnOutside = (event) => { if (!event.target.closest?.(".config-reset-menu-wrap")) setOpenResetMenu(""); };
+    const closeOnEscape = (event) => { if (event.key === "Escape") setOpenResetMenu(""); };
+    document.addEventListener("pointerdown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => { document.removeEventListener("pointerdown", closeOnOutside); document.removeEventListener("keydown", closeOnEscape); };
+  }, [openResetMenu]);
   const productId = product?.id || "configurator";
   const builtInOptionGroups = [
     { key: "mountOptions", title: "Mount Options", description: "Add, remove, reorder, or rewrite the mount choices shown at the top of the configurator." },
@@ -2647,7 +2655,7 @@ function ConfiguratorSettingsEditor({ schema, setSchema, product = null, isEdite
                         title="Drag to reorder"
                       >⋮⋮</button>
                       <button type="button" className="config-option-summary-button" onClick={() => toggleOptionRow(group.key, index)} aria-expanded={rowOpen}>
-                        <span><strong>{option.title || `Option ${index + 1}`}</strong><small>{addOn ? `Add-on ${addOn}` : price ? `Original ${price}` : "No add-on"}</small></span>
+                        <span><strong>{option.title || `Option ${index + 1}`}</strong><small>{addOn ? addOn : price ? `Original ${price}` : "No add-on"}</small></span>
                         <i>{String(option.key || "").trim() ? "Ready" : "Needs key"}</i>
                         <ChevronDown size={17} />
                       </button>
@@ -15049,5 +15057,27 @@ button { cursor: pointer; }
   letter-spacing: 0 !important;
   color: #222 !important;
 }
+
+/* Cleanup pass: grid tools spacing + editor polish */
+.hd-cat-title-block.hd-cat-title-grid { margin-bottom: 20px !important; align-items: center !important; height: auto !important; }
+.hd-cat-title-grid .hd-grid-tools { position: relative; z-index: 1; display: flex !important; align-items: center; gap: 12px !important; min-width: 0 !important; padding: 8px 10px 8px 14px !important; border-radius: 14px !important; }
+.hd-grid-tools-label { white-space: nowrap; }
+.hd-grid-tools .hd-hover-chip, .hd-grid-tools .hd-layout-edit-button { height: 34px !important; min-height: 34px !important; border-radius: 999px !important; font-size: 13px !important; }
+@media (max-width: 1100px) { .hd-cat-title-grid .hd-grid-tools { justify-self: start !important; width: auto !important; flex-wrap: wrap; } }
+@media (max-width: 640px) { .hd-cat-title-grid .hd-grid-tools { width: 100% !important; } .hd-grid-tools-label { width: 100%; } }
+
+.editor-accordion-section { overflow: hidden; }
+.config-product-summary .editor-compact-main { min-width: 0; flex: 1; }
+.config-editor-product-title strong { text-transform: none !important; letter-spacing: 0 !important; font-size: 18px !important; line-height: 1.25 !important; max-width: none !important; }
+.config-product-summary .editor-compact-meta { flex-wrap: wrap; }
+.config-product-summary .editor-compact-meta span { overflow: visible !important; text-overflow: clip !important; white-space: nowrap; max-width: none !important; }
+.config-product-summary .editor-compact-chips { flex-wrap: wrap; }
+
+.config-section-visibility-actions { display: flex !important; flex-direction: row !important; align-items: center !important; gap: 8px !important; }
+.config-section-visibility-actions button { height: 32px !important; min-width: 84px !important; padding: 0 12px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; gap: 5px !important; border-radius: 999px !important; font-size: 12px !important; font-weight: 700 !important; margin: 0 !important; }
+.config-section-visibility-row { min-height: 56px; align-items: center !important; }
+.editor-overlay-product .editor-card.apple-editor-card.editor-card-expanded .editor-compact-summary.config-product-summary { grid-template-columns: 88px minmax(0, 1fr) !important; }
+.config-product-summary .editor-compact-main { max-width: none !important; width: 100% !important; }
+.config-section-visibility-row > .config-hide-section-button { height: 32px !important; min-width: 84px !important; padding: 0 12px !important; border-radius: 999px !important; font-size: 12px !important; font-weight: 700 !important; display: inline-flex !important; align-items: center; justify-content: center; }
 
 `;
