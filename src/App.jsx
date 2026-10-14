@@ -1894,8 +1894,10 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
                           onClick={() => selectPaint(active ? null : paint)}
                         >
                           <span className="hdc-paint-chip-color" style={{ background: paint.hex || "#eee" }} />
-                          <span className="hdc-paint-chip-name">{paint.name}</span>
-                          {paint.code ? <span className="hdc-paint-chip-code">{paint.code}</span> : null}
+                          <span className="hdc-paint-chip-label">
+                            <span className="hdc-paint-chip-name">{paint.name}</span>
+                            {paint.code ? <span className="hdc-paint-chip-code">{paint.code}</span> : null}
+                          </span>
                         </button>
                       );
                     })}
@@ -14597,17 +14599,18 @@ button { cursor: pointer; }
 .hdc-step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-right: 8px; border-radius: 50%; background: #f96302; color: #fff; font-size: 12px; font-weight: 700; vertical-align: 1px; }
 .hdc-paint-subtitle { margin: 0 0 10px; font-size: 13px; color: #555; }
 .hdc-paint-chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
-.hdc-paint-chip { display: flex; flex-direction: column; padding: 0 0 6px; background: #fff; border: 1px solid #d0d0d0; border-radius: 3px; box-shadow: 0 1px 2px rgba(0,0,0,.15); cursor: pointer; font: inherit; text-align: center; overflow: hidden; }
+.hdc-paint-chip { display: flex; flex-direction: column; padding: 0; background: #fff; border: 1px solid #d0d0d0; border-radius: 3px; box-shadow: 0 1px 2px rgba(0,0,0,.15); cursor: pointer; font: inherit; text-align: center; overflow: hidden; }
 .hdc-paint-chip:hover { border-color: #999; }
 .hdc-paint-chip:focus-visible { outline: 2px solid #f96302; outline-offset: 2px; }
 .hdc-paint-chip.active { border: 2px solid #f96302; }
-.hdc-paint-chip-color { display: block; height: 56px; border-bottom: 1px solid rgba(0,0,0,.08); }
-.hdc-paint-chip-name { padding: 6px 4px 0; font-size: 11px; font-weight: 700; line-height: 1.25; color: #333; }
+.hdc-paint-chip-color { display: block; width: 100%; aspect-ratio: 1 / 1; border-bottom: 1px solid rgba(0,0,0,.08); }
+.hdc-paint-chip-label { display: flex; flex-direction: column; justify-content: center; min-height: 36px; padding: 5px 6px 6px; line-height: 1.3; }
+.hdc-paint-chip-name { font-size: 11px; font-weight: 700; color: #555; }
 .hdc-paint-chip-code { font-size: 10px; color: #777; }
 .hdc-color-role { position: absolute; z-index: 2; left: 4px; top: 4px; padding: 2px 5px; border-radius: 2px; background: rgba(255,255,255,.92); color: #333; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
 .hdc-color-role.is-accent { background: #333; color: #fff; }
 .hdc-color-description { margin: 10px 0 0; font-size: 13px; color: #555; }
-@media (max-width: 900px) { .hdc-color-swatches { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .hdc-color-swatches, .hdc-paint-chips { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .hdc-color-swatches, .hdc-paint-chips { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .config-swatch-color-field { display: flex; gap: 6px; align-items: center; }
 .config-swatch-color-field input[type="color"] { width: 38px; min-width: 38px; height: 34px; padding: 2px; }
