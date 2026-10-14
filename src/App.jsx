@@ -1904,7 +1904,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
                   </div>
                 </div>
                 <div className="hdc-paint-step">
-                  <h3 className="hdc-color-group-title"><span className="hdc-step-num">2</span>{selectedPaint ? `Recommended ${brand} Colors for ${selectedPaint.name}` : `Choose Your ${brand} Color`}</h3>
+                  <h3 className="hdc-color-group-title"><span className="hdc-step-num">2</span>{`Choose Your ${brand} Color`}</h3>
                   {selectedPaint ? (
                     <>
                       <p className="hdc-paint-subtitle">Tone-on-Tone colors blend softly with your walls. Accent colors add contrast.</p>
