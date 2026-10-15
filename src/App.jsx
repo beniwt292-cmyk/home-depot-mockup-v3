@@ -3297,6 +3297,8 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
         canvas.width = size;
         canvas.height = size;
         const ctx = canvas.getContext("2d");
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, size, size);
         const scale = Math.min(size / image.width, size / image.height);
@@ -3379,7 +3381,19 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
       hero: { width: 1400, height: 900 }
     };
     if (section === "topBanner" && field === "logoUrl") return resizeImageFileToContainedDataUrl(file, 600, 300, 0.85);
-    if (section === "topBanner" && field === "fullImageUrl") return resizeImageFileToContainedDataUrl(file, 2400, 400, 0.82);
+    if (field === "fullImageUrl") {
+      // Full banners/tiles: keep the original file when it is already a reasonable size,
+      // otherwise downsize gently so text and edges stay sharp on high-resolution screens.
+      if (file.size <= 1.5 * 1024 * 1024) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(new Error("Could not read image file"));
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.readAsDataURL(file);
+        });
+      }
+      return resizeImageFileToContainedDataUrl(file, 3200, 1600, 0.92);
+    }
     const limits = imageLimits[section] || { width: 1200, height: 700 };
     return resizeImageFileToContainedDataUrl(file, limits.width, limits.height, 0.72);
   };
