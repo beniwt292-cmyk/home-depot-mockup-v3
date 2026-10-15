@@ -4991,6 +4991,19 @@ export default function App() {
     return sorted;
   }, [products, searchQuery, sort, activeFilters, storeTodayOnly, freeDeliveryOnly]);
 
+  // Page title for filtered views (e.g. "Roller Shades") so each shop link feels like its own page.
+  const gridPageLabel = useMemo(() => {
+    if (activeFilters.category) return activeFilters.category;
+    if (activeFilters.special) return activeFilters.special;
+    if (normalizeSearchText(activeFilters.features) === "blackout") return "Blackout Shades";
+    const q = searchQuery.trim();
+    if (q) {
+      const base = q.replace(/\b\w/g, (c) => c.toUpperCase());
+      return activeFilters.shopType === "Custom" && /^(Blinds|Shades)$/i.test(q) ? `Custom ${base}` : base;
+    }
+    return "";
+  }, [activeFilters, searchQuery]);
+
   const openProductPage = (product) => {
     if (!product) return;
     navigateToAppPath(getProductRoutePath(product));
@@ -5133,10 +5146,10 @@ export default function App() {
         ) : selectedProduct ? <ProductDetailPage product={selectedProduct} onHome={goHome} onCategoryLanding={openCategoryLandingPage} onCategoryFilter={openCategoryGridPageWithFilter} onBack={returnToCategoryGridPage} onCustomize={() => openConfiguratorPage(selectedProduct)} /> : showCategoryPage ? (
           <CategoryLandingPage products={products} onHome={goHome} onShopGrid={openCategoryGridPage} onCategoryLink={openCategoryLandingLink} onNavigateCategoryFilter={openCategoryGridPageWithFilter} categoryPageSettings={categoryPageSettings} />
         ) : <>
-          <div className="hd-cat-breadcrumb"><Crumbs items={[{ label: "Home", onClick: goHome }, { label: "Window Treatments", onClick: openCategoryLandingPage }, { label: "All Window Treatments" }]} /></div>
+          <div className="hd-cat-breadcrumb"><Crumbs items={[{ label: "Home", onClick: goHome }, { label: "Window Treatments", onClick: openCategoryLandingPage }, ...(gridPageLabel ? [{ label: "All Window Treatments", onClick: openCategoryGridPage }, { label: gridPageLabel }] : [{ label: "All Window Treatments" }])]} /></div>
           <section className="hd-cat-title-block hd-cat-title-grid">
             <div>
-              <h1>WINDOW TREATMENTS</h1>
+              <h1>{(gridPageLabel || "Window Treatments").toUpperCase()}</h1>
               <p><b>{filteredProducts.length}</b> results</p>
             </div>
             <div className={`hd-grid-tools ${layoutEditMode ? "is-editing" : ""}`}>
