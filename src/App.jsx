@@ -3400,7 +3400,31 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
       setUploading("");
     }
   };
+  // Store banner/tile images as hosted files instead of inline data so the shared save stays small.
+  // (Vercel rejects save requests over ~4.5MB, so inline images made saves silently fail there.)
+  const hostImageDataUrl = async (dataUrl, fileName, field) => {
+    if (!String(dataUrl).startsWith("data:")) return dataUrl;
+    try {
+      const res = await fetch(FUNCTION_UPLOAD_IMAGE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataUrl, fileName: fileName || `${field}.jpg`, productId: editorPageKey || "page", field })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload.url) throw new Error(payload.error || "Image upload failed");
+      return payload.url;
+    } catch (error) {
+      console.warn("Image hosting unavailable; keeping inline image.", error);
+      return dataUrl;
+    }
+  };
+
   const uploadCategoryImageAsset = async (section, field, file) => {
+    const dataUrl = await buildCategoryImageDataUrl(section, field, file);
+    return hostImageDataUrl(dataUrl, file?.name, field);
+  };
+
+  const buildCategoryImageDataUrl = async (section, field, file) => {
     const imageLimits = {
       topBanner: { width: 1200, height: 400 },
       sideBanner: { width: 800, height: 900 },
@@ -4593,13 +4617,15 @@ export default function App() {
         const latestPayload = latestRes.ok ? await latestRes.json() : null;
         const latest = Array.isArray(latestPayload) ? latestPayload : latestPayload?.products;
         if (!Array.isArray(latest) || !latest.length) return;
-        await fetch(FUNCTION_PRODUCTS_URL, {
+        const saveRes = await fetch(FUNCTION_PRODUCTS_URL, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(applyMockupSettingsToProducts(latest, mockupSettings))
         });
+        if (!saveRes.ok) throw new Error(saveRes.status === 413 ? "Images are too large to save. Try smaller images." : `Save failed (${saveRes.status})`);
       } catch (error) {
         console.error("Could not auto-save mockup settings", error);
+        setSaveStatus(`Auto-save failed - ${error.message}`);
       }
     }, 650);
     return () => window.clearTimeout(timer);
@@ -4614,7 +4640,7 @@ export default function App() {
         body: JSON.stringify(applyMockupSettingsToProducts(products, mockupSettings))
       });
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload.error || `Save failed (${res.status})`);
+      if (!res.ok) throw new Error(res.status === 413 ? "Images are too large to save. Try smaller images." : (payload.error || `Save failed (${res.status})`));
       setSaveStatus(`Saved to Netlify Blobs${payload.count ? ` (${payload.count} products)` : ""}`);
       return true;
     } catch (error) {
