@@ -1959,7 +1959,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
         <Crumbs items={[
           { label: "Home", onClick: onHome || onBack },
           { label: "Window Treatments", onClick: onCategoryLanding || onBack },
-          ...(product.category ? [{ label: product.category, onClick: onCategoryFilter ? () => onCategoryFilter(product.category) : onBack }] : []),
+          ...getProductBreadcrumbs(product).slice(2).map((crumb) => ({ label: crumb, onClick: onCategoryFilter ? () => onCategoryFilter(crumb) : onBack })),
           { label: product?.name || product?.title || "Product", onClick: onReturnToPdp },
           { label: "Customize" }
         ]} />
