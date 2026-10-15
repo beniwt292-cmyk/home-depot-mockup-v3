@@ -167,6 +167,8 @@ const VENETA_LOGO_URL = "/veneta-logo.svg";
 const DEFAULT_CATEGORY_PAGE_SETTINGS = {
   topBanner: {
     label: "Sponsored",
+    mode: "template",
+    fullImageUrl: "",
     imageUrl: "",
     headline: "TRANSFORM YOUR HOME WITH VENETA SHADES",
     ctaText: "Shop Now",
@@ -3347,6 +3349,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
       sideBanner: { width: 800, height: 900 },
       hero: { width: 1400, height: 900 }
     };
+    if (section === "topBanner" && field === "fullImageUrl") return resizeImageFileToContainedDataUrl(file, 2400, 400, 0.82);
     const limits = imageLimits[section] || { width: 1200, height: 700 };
     return resizeImageFileToContainedDataUrl(file, limits.width, limits.height, 0.72);
   };
@@ -3483,6 +3486,18 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
             <div className="category-editor-controls" aria-label="Category page editable fields">
               <section className="editor-card apple-editor-card editor-card-expanded category-editor-card">
                 <div className="category-editor-section-head"><span>Top sponsored banner</span><strong>VENETA strip</strong></div>
+                <div className="category-editor-mode-toggle" role="radiogroup" aria-label="Top banner type">
+                  {[["template", "Fill out template"], ["image", "Upload full banner image"]].map(([mode, text]) => {
+                    const active = (categoryPageEditor.topBanner.mode === "image" ? "image" : "template") === mode;
+                    return <button key={mode} type="button" role="radio" aria-checked={active} className={active ? "active" : ""} onClick={() => updateCategoryPageField("topBanner", "mode", mode)}>{text}</button>;
+                  })}
+                </div>
+                {categoryPageEditor.topBanner.mode === "image" ? (
+                  <div className="category-editor-grid">
+                    {renderCategoryImageField("topBanner", "fullImageUrl", "Full banner image", "Replaces the whole banner. Best size: about 1600 x 150 px (wide and short). The image fills the banner space and may be trimmed at the edges.")}
+                    {renderCategoryTextField("topBanner", "ctaUrl", "Click destination")}
+                  </div>
+                ) : (
                 <div className="category-editor-grid">
                   {renderCategoryTextField("topBanner", "label", "Sponsored label")}
                   {renderCategoryTextField("topBanner", "headline", "Headline", true)}
@@ -3494,6 +3509,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
                   </label>
                   {renderCategoryImageField("topBanner", "imageUrl", "Right banner image", "Use the room/blinds image cropped for the right side of the banner.")}
                 </div>
+                )}
               </section>
 
               <section className="editor-card apple-editor-card editor-card-expanded category-editor-card">
@@ -4121,6 +4137,11 @@ function CategoryLandingPage({ products = [], onShopGrid, onCategoryLink, onNavi
     <div className="hd-category-landing-page">
       <div className="hd-cat-breadcrumb hd-category-landing-breadcrumb"><button type="button" onClick={onShopGrid}>Home</button><span>/</span><span>Window Treatments</span></div>
 
+      {categoryPage.topBanner.mode === "image" && String(categoryPage.topBanner.fullImageUrl || "").trim() ? (
+      <button type="button" className="hd-category-sponsored-image-banner" aria-label="Sponsored window treatment promotion" onClick={() => handleBannerCta(topSponsoredBanner.ctaUrl)}>
+        <img src={imgSrc(categoryPage.topBanner.fullImageUrl)} alt="Sponsored promotion" />
+      </button>
+      ) : (
       <section className="hd-category-sponsored-banner hd-sponsored-veneta-banner" aria-label="Sponsored window treatment promotion">
         <button type="button" className="hd-sponsored-arrow" aria-label="Previous sponsored promotion"><ChevronRight size={17} /></button>
         <div className="hd-sponsored-brand-block hd-sponsored-veneta-brand-block">
@@ -4133,6 +4154,7 @@ function CategoryLandingPage({ products = [], onShopGrid, onCategoryLink, onNavi
         <button type="button" className="hd-sponsored-shop" onClick={() => handleBannerCta(topSponsoredBanner.ctaUrl)}>{topSponsoredBanner.cta}</button>
         <div className="hd-sponsored-image"><CategoryImage src={bannerImage} alt={topSponsoredBanner.imageAlt} /></div>
       </section>
+      )}
 
       <div className="hd-category-landing-layout">
         <aside className="hd-category-left-rail" aria-label="Window treatment categories">
@@ -13955,6 +13977,11 @@ button { cursor: pointer; }
   align-items: flex-start;
   padding-top: 0;
 }
+.hd-category-sponsored-image-banner { display: block; width: 100%; height: var(--sponsored-height, 150px); padding: 0; border: 1px solid #d5d5d5; background: #fff; overflow: hidden; cursor: pointer; }
+.hd-category-sponsored-image-banner img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.category-editor-mode-toggle { display: flex; gap: 8px; margin: 4px 0 12px; }
+.category-editor-mode-toggle button { flex: 1; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; background: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.category-editor-mode-toggle button.active { border-color: #f96302; background: #fff4ec; color: #c44d00; }
 .hd-category-sponsored-banner {
   width: 100%;
   height: var(--sponsored-height);
