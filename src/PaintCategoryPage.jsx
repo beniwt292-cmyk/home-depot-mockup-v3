@@ -232,6 +232,7 @@ const PAINT_CSS = `
 .hd-paint-swatch-art.is-hero span:first-child { flex: 2; }
 
 /* Top sponsored banner (template) */
+.hd-root .hd-paint-page .hd-category-landing-breadcrumb { border-bottom: 0 !important; }
 .hd-paint-top-banner { display: grid; grid-template-columns: 210px minmax(0, 1fr) auto 34%; align-items: center; height: var(--sponsored-height, 150px); border: 1px solid #d5d5d5; background: #fff; overflow: hidden; margin-bottom: 18px; }
 .hd-paint-top-brand { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 10px; height: 100%; padding: 0 24px; }
 .hd-paint-top-brand span { font-size: 12px; color: #333; }

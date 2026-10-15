@@ -847,7 +847,7 @@ function getProductBreadcrumbs(product) {
   return crumbs;
 }
 
-const HEADER_DEPARTMENT_LINKS = ["Deals", "Halloween", "Appliances", "Building", "Flooring", "Hardware", "Lumber & Composites", "Outdoors", "Paint", "Plumbing", "Tools"];
+const HEADER_DEPARTMENT_LINKS = ["Deals", "Halloween", "Appliances", "Building", "Flooring", "Hardware", "Lumber & Composites", "Outdoors", "Paint", "Plumbing", "Tools", "Window Treatments"];
 
 function Header({ searchQuery, setSearchQuery, openEditor, compareCount, onNavigate, activePath = "" }) {
   return (
@@ -878,9 +878,10 @@ function Header({ searchQuery, setSearchQuery, openEditor, compareCount, onNavig
       <nav className="hd-department-nav" aria-label="Departments">
         <button type="button" className="hd-department-link hd-department-menu"><Menu size={16} /> Departments</button>
         {HEADER_DEPARTMENT_LINKS.map((link) => {
-          const isPaint = link === "Paint";
+          const target = link === "Paint" ? PAINT_PAGE_PATH : link === "Window Treatments" ? CATEGORY_LANDING_PATH : null;
+          const isActive = target && (activePath === target || (link === "Window Treatments" && activePath.startsWith("/window-treatments")));
           return (
-            <button type="button" key={link} className={`hd-department-link${isPaint ? " is-link" : ""}${isPaint && activePath === PAINT_PAGE_PATH ? " active" : ""}`} onClick={isPaint ? () => onNavigate?.(PAINT_PAGE_PATH) : undefined}>{link}</button>
+            <button type="button" key={link} className={`hd-department-link${target ? " is-link" : ""}${isActive ? " active" : ""}`} onClick={target ? () => onNavigate?.(target) : undefined}>{link}</button>
           );
         })}
       </nav>
