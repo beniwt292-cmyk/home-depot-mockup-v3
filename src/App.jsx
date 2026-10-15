@@ -3401,7 +3401,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
     }
   };
   // Store banner/tile images as hosted files instead of inline data so the shared save stays small.
-  // (Vercel rejects save requests over ~4.5MB, so inline images made saves silently fail there.)
+  // (The save request has a ~6MB limit, so inline images made saves silently fail once the data grew.)
   const hostImageDataUrl = async (dataUrl, fileName, field) => {
     if (!String(dataUrl).startsWith("data:")) return dataUrl;
     try {
