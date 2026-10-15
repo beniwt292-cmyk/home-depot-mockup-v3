@@ -5146,7 +5146,7 @@ export default function App() {
         ) : selectedProduct ? <ProductDetailPage product={selectedProduct} onHome={goHome} onCategoryLanding={openCategoryLandingPage} onCategoryFilter={openCategoryGridPageWithFilter} onBack={returnToCategoryGridPage} onCustomize={() => openConfiguratorPage(selectedProduct)} /> : showCategoryPage ? (
           <CategoryLandingPage products={products} onHome={goHome} onShopGrid={openCategoryGridPage} onCategoryLink={openCategoryLandingLink} onNavigateCategoryFilter={openCategoryGridPageWithFilter} categoryPageSettings={categoryPageSettings} />
         ) : <>
-          <div className="hd-cat-breadcrumb"><Crumbs items={[{ label: "Home", onClick: goHome }, ...(gridPageLabel ? [{ label: "Window Treatments", onClick: openCategoryLandingPage }, { label: gridPageLabel }] : [{ label: "Window Treatments" }])]} /></div>
+          <div className="hd-cat-breadcrumb"><Crumbs items={[{ label: "Home", onClick: goHome }, { label: "Window Treatments", onClick: openCategoryLandingPage }, { label: gridPageLabel || "All Window Treatments" }]} /></div>
           <section className="hd-cat-title-block hd-cat-title-grid">
             <div>
               <h1>{(gridPageLabel || "Window Treatments").toUpperCase()}</h1>
