@@ -20,7 +20,7 @@ const PRODUCT_ROUTE_PREFIX = "/window-treatments/product";
 const PAINT_PAGE_PATH = "/paint";
 const HOME_PAGE_PATH = "/";
 const DEFAULT_GRID_SORT = "top";
-const DEFAULT_ACTIVE_FILTERS = { category: "", brand: "", lift: "", shopType: "", included: "", features: "", event: "" };
+const DEFAULT_ACTIVE_FILTERS = { category: "", brand: "", lift: "", shopType: "", included: "", features: "", event: "", special: "" };
 const GRID_FILTER_QUERY_KEYS = {
   category: "category",
   brand: "brand",
@@ -28,7 +28,8 @@ const GRID_FILTER_QUERY_KEYS = {
   shopType: "shopType",
   included: "included",
   features: "features",
-  event: "event"
+  event: "event",
+  special: "special"
 };
 
 function normalizeAppPath(path) {
@@ -472,6 +473,21 @@ function mergeConfiguratorSchema(value) {
     liftOptions: normalizeOptions(merged.liftOptions, DEFAULT_CONFIGURATOR_SCHEMA.liftOptions),
     headrailOptions: normalizeOptions(merged.headrailOptions, DEFAULT_CONFIGURATOR_SCHEMA.headrailOptions)
   };
+}
+
+const SPECIAL_FILTER_OPTIONS = ["BEHR Paint Collection"];
+
+// A product counts as part of the BEHR collab if it has the paint-match flow on, or BEHR in its name/model.
+function isBehrCollabProduct(product) {
+  const source = product?.configurator || product?.configuratorSchema;
+  if (source?.paintPairing && normalizePaintPairing(source.paintPairing).enabled) return true;
+  return /\bbehr\b/i.test([product?.name, product?.model, product?.brand, product?.badge].join(" "));
+}
+
+function matchesSpecialFilter(product, special) {
+  if (!special) return true;
+  if (special === "BEHR Paint Collection") return isBehrCollabProduct(product);
+  return true;
 }
 
 function getProductConfiguratorSchema(product) {
@@ -4914,7 +4930,8 @@ export default function App() {
       shopType: SHOP_TYPE_OPTIONS,
       included: Array.from(new Set(products.flatMap((p) => [p.included, p.feature, p.light].filter(Boolean)))).sort(),
       features: Array.from(new Set(products.flatMap((p) => [p.features, p.light, p.lift].flat().filter(Boolean)))).sort(),
-      event: ["Special Buy", "Best Seller", "Custom Order"]
+      event: ["Special Buy", "Best Seller", "Custom Order"],
+      special: SPECIAL_FILTER_OPTIONS
     };
   }, [products]);
 
@@ -4933,6 +4950,7 @@ export default function App() {
       if (activeFilters.included && !includesText([p.included, p.feature, p.light].join(" "), activeFilters.included)) return false;
       if (activeFilters.features && !includesText([p.features, p.light, p.lift].flat().join(" "), activeFilters.features)) return false;
       if (activeFilters.event && !includesText([p.badge, p.promo].join(" "), activeFilters.event)) return false;
+      if (!matchesSpecialFilter(p, activeFilters.special)) return false;
       if (storeTodayOnly && !isStoreTodayShopType(p.shopType)) return false;
       if (freeDeliveryOnly && p.delivery === false) return false;
       return true;
@@ -5125,6 +5143,7 @@ export default function App() {
               <FilterSelect label="Features" value={activeFilters.features} onChange={(value) => setFilter("features", value)} options={fieldOptions.features} />
               <FilterSelect label="Brand" value={activeFilters.brand} onChange={(value) => setFilter("brand", value)} options={fieldOptions.brand} />
               <FilterSelect label="The Home Depot Events" value={activeFilters.event} onChange={(value) => setFilter("event", value)} options={fieldOptions.event} />
+              <FilterSelect label="Special" value={activeFilters.special} onChange={(value) => setFilter("special", value)} options={fieldOptions.special} />
             </div>
 
             <div className="hd-cat-chip-sort-row">
