@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { bannerFraming, bannerImageStyle } from "./bannerImage.js";
 import { createPortal } from "react-dom";
 import HomePage, { DEFAULT_HOME_PAGE_SETTINGS, mergeHomePageSettings } from "./HomePage.jsx";
 import PaintCategoryPage, { DEFAULT_PAINT_PAGE_SETTINGS, mergePaintPageSettings } from "./PaintCategoryPage.jsx";
@@ -174,6 +175,9 @@ const DEFAULT_CATEGORY_PAGE_SETTINGS = {
     label: "Sponsored",
     mode: "template",
     fullImageUrl: "",
+    imageZoom: 1,
+    imagePosX: 50,
+    imagePosY: 50,
     imageUrl: "",
     headline: "TRANSFORM YOUR HOME WITH VENETA SHADES",
     ctaText: "Shop Now",
@@ -197,7 +201,7 @@ const DEFAULT_CATEGORY_PAGE_SETTINGS = {
 
 function mergeCategorySection(defaults, value) {
   const source = value && typeof value === "object" ? value : {};
-  return Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [key, typeof source[key] === "string" ? source[key] : fallback]));
+  return Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [key, typeof source[key] === typeof fallback ? source[key] : fallback]));
 }
 
 function mergeCategoryPageSettings(value) {
@@ -3470,6 +3474,47 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
       )}
     </label>
   );
+  const renderImageFraming = (section, aspect) => {
+    const settings = categoryPageEditor[section] || {};
+    const url = String(settings.fullImageUrl || "").trim();
+    if (!url) return null;
+    const { zoom, x, y } = bannerFraming(settings);
+    const set = (field, value) => updateCategoryPageField(section, field, Math.round(value * 100) / 100);
+    const startDrag = (event) => {
+      event.preventDefault();
+      const box = event.currentTarget.getBoundingClientRect();
+      const start = { px: event.clientX, py: event.clientY, x, y };
+      const move = (e) => {
+        // Dragging right reveals more of the left side, like moving the photo itself.
+        const dx = ((e.clientX - start.px) / box.width) * 100 / zoom;
+        const dy = ((e.clientY - start.py) / box.height) * 100 / zoom;
+        set("imagePosX", Math.min(100, Math.max(0, start.x - dx * 2)));
+        set("imagePosY", Math.min(100, Math.max(0, start.y - dy * 2)));
+      };
+      const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    };
+    const slider = (field, label, value, min, max, step, format) => (
+      <label className="image-framing-slider">
+        <span>{label}<em>{format(value)}</em></span>
+        <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => set(field, Number(e.target.value))} />
+      </label>
+    );
+    return (
+      <div className="image-framing category-editor-field-wide">
+        <div className="image-framing-head"><span>Position &amp; zoom</span><button type="button" onClick={() => { set("imageZoom", 1); set("imagePosX", 50); set("imagePosY", 50); }}>Reset</button></div>
+        <div className="image-framing-preview" style={{ aspectRatio: String(aspect) }} onPointerDown={startDrag} onWheel={(e) => set("imageZoom", Math.min(3, Math.max(1, zoom - e.deltaY * 0.002)))} title="Drag to move. Scroll to zoom.">
+          <img src={imgSrc(url)} alt="" draggable={false} style={bannerImageStyle(settings)} />
+        </div>
+        <p className="image-framing-hint">Drag the preview to move the image. Scroll or use the slider to zoom.</p>
+        {slider("imageZoom", "Zoom", zoom, 1, 3, 0.01, (v) => `${Math.round(v * 100)}%`)}
+        {slider("imagePosX", "Left / right", x, 0, 100, 1, (v) => `${Math.round(v)}%`)}
+        {slider("imagePosY", "Up / down", y, 0, 100, 1, (v) => `${Math.round(v)}%`)}
+      </div>
+    );
+  };
+
   const renderCategoryImageField = (section, field, label, helper) => {
     const value = categoryPageEditor[section][field] || "";
     const uploadKey = `category-${section}-${field}`;
@@ -3522,6 +3567,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
                 {categoryPageEditor[section].mode === "image" ? (
                   <div className="category-editor-grid">
                     {renderCategoryImageField(section, "fullImageUrl", "Full tile image", `Replaces the whole tile. Best size: ${size}. The image fills the tile and may be trimmed at the edges.`)}
+                    {renderImageFraming(section, section === "sponsoredMain" ? 1000 / 340 : 2)}
                     {renderCategoryTextField(section, "ctaUrl", "Click destination")}
                   </div>
                 ) : (
@@ -3549,6 +3595,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
                 {categoryPageEditor.topBanner.mode === "image" ? (
                   <div className="category-editor-grid">
                     {renderCategoryImageField("topBanner", "fullImageUrl", "Full banner image", "Replaces the whole banner. Best size: about 1600 x 150 px (wide and short). The image fills the banner space and may be trimmed at the edges.")}
+                    {renderImageFraming("topBanner", 1600 / 150)}
                     {renderCategoryTextField("topBanner", "ctaUrl", "Click destination")}
                   </div>
                 ) : (
@@ -4209,7 +4256,7 @@ function CategoryLandingPage({ products = [], onHome, onShopGrid, onCategoryLink
 
       {categoryPage.topBanner.mode === "image" && String(categoryPage.topBanner.fullImageUrl || "").trim() ? (
       <button type="button" className="hd-category-sponsored-image-banner" aria-label="Sponsored window treatment promotion" onClick={() => handleBannerCta(topSponsoredBanner.ctaUrl)}>
-        <img src={imgSrc(categoryPage.topBanner.fullImageUrl)} alt="Sponsored promotion" />
+        <img src={imgSrc(categoryPage.topBanner.fullImageUrl)} alt="Sponsored promotion" style={bannerImageStyle(categoryPage.topBanner)} />
       </button>
       ) : (
       <section className="hd-category-sponsored-banner hd-sponsored-veneta-banner" aria-label="Sponsored window treatment promotion">
@@ -14069,6 +14116,18 @@ button { cursor: pointer; }
   padding-top: 0;
 }
 .hd-category-sponsored-image-banner { display: block; width: 100%; height: var(--sponsored-height, 150px); padding: 0; border: 1px solid #d5d5d5; background: #fff; overflow: hidden; cursor: pointer; }
+.image-framing { grid-column: 1 / -1; display: grid; gap: 8px; }
+.image-framing-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; }
+.image-framing-head button { border: 1px solid #ccc; background: #fff; border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
+.image-framing-preview { position: relative; width: 100%; overflow: hidden; border: 1px dashed #999; border-radius: 6px; background: #f2f2f2; cursor: grab; touch-action: none; user-select: none; }
+.image-framing-preview:active { cursor: grabbing; }
+.image-framing-preview img { width: 100%; height: 100%; display: block; pointer-events: none; }
+.image-framing-hint { margin: 0; font-size: 12px; color: #666; }
+.image-framing-slider { display: grid; gap: 4px; font-size: 12px; }
+.image-framing-slider span { display: flex; justify-content: space-between; }
+.image-framing-slider em { font-style: normal; color: #666; }
+.image-framing-slider input { width: 100%; }
+.hd-category-sponsored-image-banner { overflow: hidden; }
 .hd-category-sponsored-image-banner img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .hd-logo-home-button { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; }
 .hd-department-nav { max-width: 1534px; margin: 0 auto; display: flex; align-items: center; gap: 2px; padding: 0 11px; height: 40px; border-top: 1px solid #e5e5e5; overflow-x: auto; scrollbar-width: none; }

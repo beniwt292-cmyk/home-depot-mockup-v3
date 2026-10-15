@@ -1,3 +1,4 @@
+import { bannerImageStyle } from "./bannerImage.js";
 import React, { useState } from "react";
 import { ChevronRight, ChevronLeft, Star, PaintBucket, PaintRoller, Paintbrush, Package, SprayCan } from "lucide-react";
 
@@ -9,6 +10,9 @@ export const DEFAULT_PAINT_PAGE_SETTINGS = {
     label: "Sponsored",
     mode: "template",
     fullImageUrl: "",
+    imageZoom: 1,
+    imagePosX: 50,
+    imagePosY: 50,
     brand: "Glidden",
     logoUrl: "",
     headline: "READY FOR RAIN IN 1 HOUR",
@@ -24,7 +28,7 @@ export function mergePaintPageSettings(value) {
   const banner = source.topBanner && typeof source.topBanner === "object" ? source.topBanner : {};
   const defaults = DEFAULT_PAINT_PAGE_SETTINGS.topBanner;
   return {
-    topBanner: Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [key, typeof banner[key] === "string" ? banner[key] : fallback]))
+    topBanner: Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [key, typeof banner[key] === typeof fallback ? banner[key] : fallback]))
   };
 }
 
@@ -107,7 +111,7 @@ export default function PaintCategoryPage({ settings, onBannerClick, onHome, img
 
       {showFullImage ? (
         <button type="button" className="hd-category-sponsored-image-banner" aria-label="Sponsored paint promotion" onClick={handleBanner}>
-          <img src={imgSrc(banner.fullImageUrl)} alt="Sponsored promotion" />
+          <img src={imgSrc(banner.fullImageUrl)} alt="Sponsored promotion" style={bannerImageStyle(banner)} />
         </button>
       ) : (
         <section className="hd-paint-top-banner" aria-label="Sponsored paint promotion">

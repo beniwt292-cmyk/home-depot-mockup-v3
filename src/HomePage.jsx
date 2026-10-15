@@ -1,3 +1,4 @@
+import { bannerImageStyle } from "./bannerImage.js";
 import React, { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Star, Truck, Ruler, PaintBucket, Lamp, Sofa, Blinds, Wrench } from "lucide-react";
 
@@ -10,6 +11,9 @@ export const DEFAULT_HOME_PAGE_SETTINGS = {
     label: "Sponsored",
     mode: "template",
     fullImageUrl: "",
+    imageZoom: 1,
+    imagePosX: 50,
+    imagePosY: 50,
     brand: "BEHR × VENETA",
     logoUrl: "",
     headline: "PAINT MEETS SHADES",
@@ -23,6 +27,9 @@ export const DEFAULT_HOME_PAGE_SETTINGS = {
     label: "Sponsored",
     mode: "template",
     fullImageUrl: "",
+    imageZoom: 1,
+    imagePosX: 50,
+    imagePosY: 50,
     brand: "VENETA",
     logoUrl: "/veneta-logo.svg",
     headline: "DARKER ROOMS, BETTER SLEEP",
@@ -36,7 +43,7 @@ export const DEFAULT_HOME_PAGE_SETTINGS = {
 
 function mergeTile(defaults, value) {
   const source = value && typeof value === "object" ? value : {};
-  return Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [key, typeof source[key] === "string" ? source[key] : fallback]));
+  return Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [key, typeof source[key] === typeof fallback ? source[key] : fallback]));
 }
 
 export function mergeHomePageSettings(value) {
@@ -114,7 +121,7 @@ function SponsoredTile({ tile, products, imgSrc, onClick, className }) {
   if (tile.mode === "image" && String(tile.fullImageUrl || "").trim()) {
     return (
       <button type="button" className={`hd-home-tile hd-home-sponsored-image ${className}`} onClick={() => onClick(tile.ctaUrl)} aria-label={`${tile.brand} sponsored promotion`}>
-        <img src={imgSrc(tile.fullImageUrl)} alt="Sponsored promotion" />
+        <img src={imgSrc(tile.fullImageUrl)} alt="Sponsored promotion" style={bannerImageStyle(tile)} />
       </button>
     );
   }
@@ -294,7 +301,7 @@ const HOME_CSS = `
 .hd-home-tile.is-third .hd-home-sponsored-copy p { font-size: 13px; }
 .hd-home-sponsored-image-wrap { display: flex; align-items: center; justify-content: center; background: #f4f1ec; color: #a0a0a0; min-width: 0; overflow: hidden; }
 .hd-home-sponsored-image-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.hd-home-sponsored-image { padding: 0; }
+.hd-home-sponsored-image { padding: 0; overflow: hidden; }
 .hd-home-sponsored-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .hd-home-text-cta { margin-top: 4px; border: 0; border-bottom: 1px solid currentColor; background: transparent; padding: 0 0 2px; font-size: 15px; color: inherit; cursor: pointer; white-space: nowrap; }
 .hd-home-sponsored .hd-home-text-cta { color: #111; }
