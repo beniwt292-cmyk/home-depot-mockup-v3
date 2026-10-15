@@ -89,7 +89,7 @@ function Price({ value }) {
   return <span className="hd-paint-price"><sup>$</sup>{dollars}<sup>{cents}</sup></span>;
 }
 
-export default function PaintCategoryPage({ settings, onBannerClick, imgSrc = (url) => url }) {
+export default function PaintCategoryPage({ settings, onBannerClick, onHome, imgSrc = (url) => url }) {
   const page = mergePaintPageSettings(settings);
   const banner = page.topBanner;
   const [heroIndex, setHeroIndex] = useState(0);
@@ -103,7 +103,7 @@ export default function PaintCategoryPage({ settings, onBannerClick, imgSrc = (u
   return (
     <div className="hd-category-landing-page hd-paint-page">
       <style>{PAINT_CSS}</style>
-      <div className="hd-cat-breadcrumb hd-category-landing-breadcrumb"><span>Home</span><span>/</span><span>Paint</span></div>
+      <div className="hd-cat-breadcrumb hd-category-landing-breadcrumb"><button type="button" onClick={onHome}>Home</button><span>/</span><span>Paint</span></div>
 
       {showFullImage ? (
         <button type="button" className="hd-category-sponsored-image-banner" aria-label="Sponsored paint promotion" onClick={handleBanner}>

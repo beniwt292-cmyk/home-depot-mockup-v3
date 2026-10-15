@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import HomePage, { DEFAULT_HOME_PAGE_SETTINGS, mergeHomePageSettings } from "./HomePage.jsx";
 import PaintCategoryPage, { DEFAULT_PAINT_PAGE_SETTINGS, mergePaintPageSettings } from "./PaintCategoryPage.jsx";
 import {
   Search, ShoppingCart, User, Menu, Heart, Star, Grid, List, Truck,
@@ -16,6 +17,7 @@ const CATEGORY_LANDING_PATH = "/window-treatments";
 const CATEGORY_GRID_PATH = "/window-treatments/products";
 const PRODUCT_ROUTE_PREFIX = "/window-treatments/product";
 const PAINT_PAGE_PATH = "/paint";
+const HOME_PAGE_PATH = "/";
 const DEFAULT_GRID_SORT = "top";
 const DEFAULT_ACTIVE_FILTERS = { category: "", brand: "", lift: "", shopType: "", included: "", features: "", event: "" };
 const GRID_FILTER_QUERY_KEYS = {
@@ -136,7 +138,7 @@ function getConfiguratorRoutePath(product) {
 
 function parseAppRoute(path) {
   const clean = normalizeAppPath(path);
-  if (clean === "/") return { type: "grid", path: CATEGORY_GRID_PATH, replacePath: CATEGORY_GRID_PATH };
+  if (clean === HOME_PAGE_PATH) return { type: "home", path: clean };
   if (clean === CATEGORY_LANDING_PATH) return { type: "category", path: clean };
   if (clean === PAINT_PAGE_PATH) return { type: "paint", path: clean };
   if (clean === CATEGORY_GRID_PATH) return { type: "grid", path: clean };
@@ -223,7 +225,8 @@ const DEFAULT_MOCKUP_SETTINGS = {
   showReferenceBorders: false,
   placeholderNonBordered: false,
   categoryPage: DEFAULT_CATEGORY_PAGE_SETTINGS,
-  paintPage: DEFAULT_PAINT_PAGE_SETTINGS
+  paintPage: DEFAULT_PAINT_PAGE_SETTINGS,
+  homePage: DEFAULT_HOME_PAGE_SETTINGS
 };
 
 function mergeMockupSettings(value) {
@@ -233,7 +236,8 @@ function mergeMockupSettings(value) {
     showReferenceBorders: typeof source.showReferenceBorders === "boolean" ? source.showReferenceBorders : DEFAULT_MOCKUP_SETTINGS.showReferenceBorders,
     placeholderNonBordered: typeof source.placeholderNonBordered === "boolean" ? source.placeholderNonBordered : DEFAULT_MOCKUP_SETTINGS.placeholderNonBordered,
     categoryPage: mergeCategoryPageSettings(source.categoryPage),
-    paintPage: mergePaintPageSettings(source.paintPage)
+    paintPage: mergePaintPageSettings(source.paintPage),
+    homePage: mergeHomePageSettings(source.homePage)
   };
 }
 
@@ -856,7 +860,7 @@ function Header({ searchQuery, setSearchQuery, openEditor, compareCount, onNavig
       <div className="hd-credit-row" aria-hidden="true" />
       <div className="main-header hd-screenshot-main">
         <div className="hd-logo-wrap">
-          <button type="button" className="hd-logo-home-button" onClick={() => onNavigate?.(CATEGORY_LANDING_PATH)} aria-label="Go to Window Treatments"><img src="/logo.svg" alt="The Home Depot" className="custom-logo" /></button>
+          <button type="button" className="hd-logo-home-button" onClick={() => onNavigate?.(HOME_PAGE_PATH)} aria-label="Go to home page"><img src="/logo.svg" alt="The Home Depot" className="custom-logo" /></button>
         </div>
         <div className="hd-store-strip">
           <span className="hd-store-item"><Store size={15} /> Store <b>10PM</b></span>
@@ -1484,7 +1488,7 @@ function StockPurchasePanel({ product }) {
 }
 
 
-function ProductDetailPage({ product, onBack, onCustomize }) {
+function ProductDetailPage({ product, onBack, onCustomize, onHome }) {
   // The side rail has 6 total visible slots. The primary image and the hover
   // image (when Hover in Carousel is enabled and a hover URL exists) consume
   // the first slots before uploaded/gallery images. The 6th slot becomes the
@@ -1599,7 +1603,7 @@ function ProductDetailPage({ product, onBack, onCustomize }) {
           <React.Fragment key={`${crumb}-${index}`}>
             <span>/</span>
             {index === 0 ? (
-              <button type="button" className="pdp-shot-crumb-button" onClick={onBack}>{crumb}</button>
+              <button type="button" className="pdp-shot-crumb-button" onClick={crumb === "Home" && onHome ? onHome : onBack}>{crumb}</button>
             ) : (
               <span>{crumb}</span>
             )}
@@ -1789,7 +1793,7 @@ function ProductDetailPage({ product, onBack, onCustomize }) {
 }
 
 
-function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchema }) {
+function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchema, onHome }) {
   const activeConfiguratorSchema = useMemo(() => getRenderableConfiguratorSchema(product, configuratorSchema), [configuratorSchema, product]);
   const [config, setConfig] = useState(() => {
     const defaults = activeConfiguratorSchema.defaults || {};
@@ -1941,7 +1945,7 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
     <div className="hdc-page">
       <nav className="hdc-breadcrumb pdp-shot-breadcrumb" aria-label="Breadcrumb">
         <button type="button" className="pdp-shot-back-button hdc-back-product-button" onClick={onReturnToPdp}><ArrowLeft size={14} /> Back to Product</button><span>/</span>
-        <button type="button" onClick={onBack}>Home</button><span>/</span>
+        <button type="button" onClick={onHome || onBack}>Home</button><span>/</span>
         <button type="button" onClick={onBack}>Window Treatments</button><span>/</span>
         <button type="button" onClick={onBack}>Window Shades</button><span>/</span>
         <span>{product.category || "Cellular Shades"}</span>
@@ -2957,9 +2961,10 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
   const isConfiguratorEditor = editorMode === "configurator";
   const isProductEditor = editorMode === "product";
   const isPaintEditor = editorMode === "paint";
-  const isCategoryEditor = editorMode === "category" || isPaintEditor;
-  const editorPageKey = isPaintEditor ? "paintPage" : "categoryPage";
-  const mergeEditorPageSettings = isPaintEditor ? mergePaintPageSettings : mergeCategoryPageSettings;
+  const isHomeEditor = editorMode === "home";
+  const isCategoryEditor = editorMode === "category" || isPaintEditor || isHomeEditor;
+  const editorPageKey = isHomeEditor ? "homePage" : isPaintEditor ? "paintPage" : "categoryPage";
+  const mergeEditorPageSettings = isHomeEditor ? mergeHomePageSettings : isPaintEditor ? mergePaintPageSettings : mergeCategoryPageSettings;
   const orderedProducts = Array.isArray(displayProducts) && displayProducts.length ? displayProducts : products;
   const activeConfiguratorProduct = isConfiguratorEditor ? orderedProducts[0] : null;
   const activeConfiguratorSchema = activeConfiguratorProduct ? getProductConfiguratorSchema(activeConfiguratorProduct) : DEFAULT_CONFIGURATOR_SCHEMA;
@@ -3490,14 +3495,14 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
           <div className="editor-sticky-top">
             <div className="editor-header">
               <div>
-                <div className="editor-kicker"><Pencil size={15} /> {isPaintEditor ? "Paint page panel" : "Category page panel"}</div>
-                <h2>{isPaintEditor ? "Paint Page Editor" : "Category Page Editor"}</h2>
-                <p>{isPaintEditor ? "Edit the Paint page top sponsored banner. Fill out the template or upload one image for the whole banner." : "Edit category page copy and campaign images. Logo assets are served from public files, while banner and hero images save with the category page data."}</p>
+                <div className="editor-kicker"><Pencil size={15} /> {isHomeEditor ? "Home page panel" : isPaintEditor ? "Paint page panel" : "Category page panel"}</div>
+                <h2>{isHomeEditor ? "Home Page Editor" : isPaintEditor ? "Paint Page Editor" : "Category Page Editor"}</h2>
+                <p>{isHomeEditor ? "Edit the two sponsored tiles at the top of the home page. Fill out the template or upload one image for the whole tile." : isPaintEditor ? "Edit the Paint page top sponsored banner. Fill out the template or upload one image for the whole banner." : "Edit category page copy and campaign images. Logo assets are served from public files, while banner and hero images save with the category page data."}</p>
               </div>
               <button onClick={onClose}><X size={22} /></button>
             </div>
             <div className="editor-actions editor-actions-enhanced">
-              <button onClick={handleEditorSave} className="save-action"><Save size={16} /> {isPaintEditor ? "Save Paint Page" : "Save Category Page"}</button>
+              <button onClick={handleEditorSave} className="save-action"><Save size={16} /> {isHomeEditor ? "Save Home Page" : isPaintEditor ? "Save Paint Page" : "Save Category Page"}</button>
               <button onClick={reloadProducts} className="secondary-action"><RotateCcw size={16} /> Reload</button>
               {saveStatus && <span className="save-status">{saveStatus}</span>}
             </div>
@@ -3505,6 +3510,34 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
 
           <div className="category-editor-workspace">
             <div className="category-editor-controls" aria-label="Category page editable fields">
+              {isHomeEditor ? [["sponsoredMain", "Sponsored tile 1", "Large top tile", "about 1000 x 340 px"], ["sponsoredSecond", "Sponsored tile 2", "Small tile, second row", "about 500 x 250 px"]].map(([section, title, subtitle, size]) => (
+              <section key={section} className="editor-card apple-editor-card editor-card-expanded category-editor-card">
+                <div className="category-editor-section-head"><span>{title}</span><strong>{subtitle}</strong></div>
+                <div className="category-editor-mode-toggle" role="radiogroup" aria-label={`${title} type`}>
+                  {[["template", "Fill out template"], ["image", "Upload full tile image"]].map(([mode, text]) => {
+                    const active = (categoryPageEditor[section].mode === "image" ? "image" : "template") === mode;
+                    return <button key={mode} type="button" role="radio" aria-checked={active} className={active ? "active" : ""} onClick={() => updateCategoryPageField(section, "mode", mode)}>{text}</button>;
+                  })}
+                </div>
+                {categoryPageEditor[section].mode === "image" ? (
+                  <div className="category-editor-grid">
+                    {renderCategoryImageField(section, "fullImageUrl", "Full tile image", `Replaces the whole tile. Best size: ${size}. The image fills the tile and may be trimmed at the edges.`)}
+                    {renderCategoryTextField(section, "ctaUrl", "Click destination")}
+                  </div>
+                ) : (
+                  <div className="category-editor-grid">
+                    {renderCategoryTextField(section, "label", "Sponsored label")}
+                    {renderCategoryTextField(section, "brand", "Brand name")}
+                    {renderCategoryTextField(section, "headline", "Headline", true)}
+                    {renderCategoryTextField(section, "subhead", "Subheadline", true)}
+                    {renderCategoryTextField(section, "ctaText", "CTA text")}
+                    {renderCategoryTextField(section, "ctaUrl", "CTA destination")}
+                    {renderCategoryImageField(section, "logoUrl", "Brand logo", "Optional. If empty, the brand name shows as text.")}
+                    {renderCategoryImageField(section, "imageUrl", "Tile image", "Optional. If empty, the linked product's main image is used.")}
+                  </div>
+                )}
+              </section>
+              )) : <>
               <section className="editor-card apple-editor-card editor-card-expanded category-editor-card">
                 <div className="category-editor-section-head"><span>Top sponsored banner</span><strong>{isPaintEditor ? "Paint page strip" : "VENETA strip"}</strong></div>
                 <div className="category-editor-mode-toggle" role="radiogroup" aria-label="Top banner type">
@@ -3660,6 +3693,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
                   </div>
                 </div>
               </section>
+              </>}
               </>}
             </div>
           </div>
@@ -4093,7 +4127,7 @@ const CATEGORY_PAGE_IMAGES = {
   }
 };
 
-function CategoryLandingPage({ products = [], onShopGrid, onCategoryLink, onNavigateCategoryFilter, categoryPageSettings }) {
+function CategoryLandingPage({ products = [], onHome, onShopGrid, onCategoryLink, onNavigateCategoryFilter, categoryPageSettings }) {
   const imageCandidates = products.filter((product) => product?.imageUrl || product?.hoverImageUrl || product?.galleryImages?.length);
   const getProductImage = (keywords = [], offset = 0) => {
     const words = Array.isArray(keywords) ? keywords : [keywords];
@@ -4171,7 +4205,7 @@ function CategoryLandingPage({ products = [], onShopGrid, onCategoryLink, onNavi
 
   return (
     <div className="hd-category-landing-page">
-      <div className="hd-cat-breadcrumb hd-category-landing-breadcrumb"><button type="button" onClick={onShopGrid}>Home</button><span>/</span><span>Window Treatments</span></div>
+      <div className="hd-cat-breadcrumb hd-category-landing-breadcrumb"><button type="button" onClick={onHome || onShopGrid}>Home</button><span>/</span><span>Window Treatments</span></div>
 
       {categoryPage.topBanner.mode === "image" && String(categoryPage.topBanner.fullImageUrl || "").trim() ? (
       <button type="button" className="hd-category-sponsored-image-banner" aria-label="Sponsored window treatment promotion" onClick={() => handleBannerCta(topSponsoredBanner.ctaUrl)}>
@@ -4875,7 +4909,7 @@ export default function App() {
       return;
     }
 
-    if (route.type === "paint") {
+    if (route.type === "paint" || route.type === "home") {
       setShowCategoryPage(false);
       setSelectedProductPage(null);
       setConfiguratorProductPage(null);
@@ -4930,6 +4964,8 @@ export default function App() {
   const configuratorProduct = configuratorProductPage ? (products.find((p) => String(p.id) === String(configuratorProductPage.id)) || configuratorProductPage) : null;
   const categoryPageSettings = mergeCategoryPageSettings(mockupSettings.categoryPage);
   const showPaintPage = parseAppRoute(routePath).type === "paint";
+  const showHomePage = parseAppRoute(routePath).type === "home";
+  const goHome = () => { navigateToAppPath(HOME_PAGE_PATH); setShowCategoryPage(false); setSelectedProductPage(null); setConfiguratorProductPage(null); scrollToPageTop(); };
   const openPaintBannerLink = (url) => {
     const clean = String(url || "").trim();
     if (!clean || typeof window === "undefined") return;
@@ -4963,20 +4999,23 @@ export default function App() {
     <div className="hd-root">
       <style>{CSS}</style>
       <Header searchQuery={searchQuery} setSearchQuery={setSearchQuery} openEditor={() => setEditorOpen(true)} compareCount={compare.size} onNavigate={(path) => navigateToAppPath(path)} activePath={normalizeAppPath(routePath)} />
-      <main className={showPaintPage ? "page hd-category-landing-shell hd-paint-page-shell" : selectedProduct || configuratorProduct ? "page" : showCategoryPage ? "page hd-category-landing-shell" : "page category-screenshot-page"}>
-        {showPaintPage ? (
-          <PaintCategoryPage settings={mockupSettings.paintPage} onBannerClick={openPaintBannerLink} imgSrc={imgSrc} />
+      <main className={showHomePage ? "page hd-category-landing-shell hd-home-page-shell" : showPaintPage ? "page hd-category-landing-shell hd-paint-page-shell" : selectedProduct || configuratorProduct ? "page" : showCategoryPage ? "page hd-category-landing-shell" : "page category-screenshot-page"}>
+        {showHomePage ? (
+          <HomePage products={products} settings={mockupSettings.homePage} imgSrc={imgSrc} onNavigate={(path) => { navigateToAppPath(path); scrollToPageTop(); }} onOpenProduct={openProductPage} onCategoryFilter={openCategoryGridPageWithFilter} onBannerClick={(url) => { openPaintBannerLink(url); scrollToPageTop(); }} />
+        ) : showPaintPage ? (
+          <PaintCategoryPage settings={mockupSettings.paintPage} onBannerClick={openPaintBannerLink} imgSrc={imgSrc} onHome={goHome} />
         ) : configuratorProduct ? (
           <ProductConfigurator
             product={configuratorProduct}
             configuratorSchema={getProductConfiguratorSchema(configuratorProduct)}
             onBack={returnToCategoryGridPage}
             onReturnToPdp={() => openProductPage(configuratorProduct)}
+            onHome={goHome}
           />
-        ) : selectedProduct ? <ProductDetailPage product={selectedProduct} onBack={returnToCategoryGridPage} onCustomize={() => openConfiguratorPage(selectedProduct)} /> : showCategoryPage ? (
-          <CategoryLandingPage products={products} onShopGrid={openCategoryGridPage} onCategoryLink={openCategoryLandingLink} onNavigateCategoryFilter={openCategoryGridPageWithFilter} categoryPageSettings={categoryPageSettings} />
+        ) : selectedProduct ? <ProductDetailPage product={selectedProduct} onHome={goHome} onBack={returnToCategoryGridPage} onCustomize={() => openConfiguratorPage(selectedProduct)} /> : showCategoryPage ? (
+          <CategoryLandingPage products={products} onHome={goHome} onShopGrid={openCategoryGridPage} onCategoryLink={openCategoryLandingLink} onNavigateCategoryFilter={openCategoryGridPageWithFilter} categoryPageSettings={categoryPageSettings} />
         ) : <>
-          <div className="hd-cat-breadcrumb"><button type="button" className="pdp-shot-back-button hd-cat-page-button" onClick={openCategoryLandingPage}><ArrowLeft size={14} /> Category Page</button><span>/</span><button type="button" onClick={clearFilters}>Home</button><span>/</span><span>Window Treatments</span></div>
+          <div className="hd-cat-breadcrumb"><button type="button" className="pdp-shot-back-button hd-cat-page-button" onClick={openCategoryLandingPage}><ArrowLeft size={14} /> Category Page</button><span>/</span><button type="button" onClick={goHome}>Home</button><span>/</span><span>Window Treatments</span></div>
           <section className="hd-cat-title-block hd-cat-title-grid">
             <div>
               <h1>WINDOW TREATMENTS</h1>
@@ -5033,7 +5072,7 @@ export default function App() {
           </section>
         </>}
       </main>
-      {editorOpen && <EditorPanel products={products} displayProducts={configuratorProduct ? [configuratorProduct] : selectedProduct ? [selectedProduct] : filteredProducts} editorMode={showPaintPage ? "paint" : configuratorProduct ? "configurator" : selectedProduct ? "product" : showCategoryPage ? "category" : "grid"} setProducts={setProducts} onClose={() => setEditorOpen(false)} saveProducts={saveProducts} saveStatus={saveStatus} reloadProducts={loadProducts} placeholderNonBordered={placeholderNonBordered} setPlaceholderNonBordered={setPlaceholderNonBordered} mockupSettings={mockupSettings} setMockupSettings={setMockupSettings} bannerPresets={bannerPresets} bannerPresetStatus={bannerPresetStatus} saveBannerPreset={saveBannerPreset} loadBannerPreset={loadBannerPreset} deleteBannerPreset={deleteBannerPreset} renameBannerPreset={renameBannerPreset} reloadBannerPresets={loadBannerPresets} />}
+      {editorOpen && <EditorPanel products={products} displayProducts={configuratorProduct ? [configuratorProduct] : selectedProduct ? [selectedProduct] : filteredProducts} editorMode={showHomePage ? "home" : showPaintPage ? "paint" : configuratorProduct ? "configurator" : selectedProduct ? "product" : showCategoryPage ? "category" : "grid"} setProducts={setProducts} onClose={() => setEditorOpen(false)} saveProducts={saveProducts} saveStatus={saveStatus} reloadProducts={loadProducts} placeholderNonBordered={placeholderNonBordered} setPlaceholderNonBordered={setPlaceholderNonBordered} mockupSettings={mockupSettings} setMockupSettings={setMockupSettings} bannerPresets={bannerPresets} bannerPresetStatus={bannerPresetStatus} saveBannerPreset={saveBannerPreset} loadBannerPreset={loadBannerPreset} deleteBannerPreset={deleteBannerPreset} renameBannerPreset={renameBannerPreset} reloadBannerPresets={loadBannerPresets} />}
       {quickView && <QuickViewModal product={quickView} onClose={() => setQuickView(null)} onOpenProduct={openProductPage} />}
     </div>
   );
