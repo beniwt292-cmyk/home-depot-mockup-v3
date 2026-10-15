@@ -135,7 +135,13 @@ function SponsoredTile({ tile, products, imgSrc, onClick, className }) {
     <section className={`hd-home-tile hd-home-sponsored ${className}`} onClick={() => onClick(tile.ctaUrl)} role="link" aria-label={`${tile.brand} sponsored promotion`}>
       <div className="hd-home-sponsored-copy">
         <span className="hd-home-sponsored-label">{tile.label}</span>
-        {tile.logoUrl ? <img className="hd-home-sponsored-logo" src={imgSrc(tile.logoUrl)} alt={tile.brand} /> : <strong className="hd-home-sponsored-brand">{tile.brand}</strong>}
+        {tile.logoUrl ? <img className="hd-home-sponsored-logo" src={imgSrc(tile.logoUrl)} alt={tile.brand} /> : /behr\s*[×x]\s*veneta/i.test(tile.brand || "") ? (
+          <span className="hd-home-cobrand" aria-label={tile.brand}>
+            <img src="/behr-logo.svg" alt="BEHR" className="hd-home-cobrand-behr" />
+            <span className="hd-home-cobrand-x">×</span>
+            <img src="/veneta-logo.svg" alt="VENETA" className="hd-home-cobrand-veneta" />
+          </span>
+        ) : <strong className="hd-home-sponsored-brand">{tile.brand}</strong>}
         <h2>{tile.headline}</h2>
         {tile.subhead ? <p>{tile.subhead}</p> : null}
         <button type="button" className="hd-home-text-cta" onClick={(e) => { e.stopPropagation(); onClick(tile.ctaUrl); }}>{tile.ctaText}</button>
@@ -298,6 +304,11 @@ const HOME_CSS = `
 .hd-home-sponsored-copy { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 10px; padding: 24px 28px; min-width: 0; }
 .hd-home-tile.is-third .hd-home-sponsored-copy { padding: 18px 18px; gap: 7px; }
 .hd-home-sponsored-label { font-size: 12px; color: #555; }
+.hd-home-cobrand { display: inline-flex; align-items: center; gap: 12px; }
+.hd-home-cobrand img { display: block; width: auto; }
+.hd-home-cobrand-behr { height: 26px; }
+.hd-home-cobrand-veneta { height: 20px; }
+.hd-home-cobrand-x { font-size: 20px; font-weight: 700; color: #111; line-height: 1; }
 .hd-home-sponsored-brand { font-size: 22px; font-weight: 800; letter-spacing: .5px; color: #111; }
 .hd-home-sponsored-logo { max-width: 150px; max-height: 40px; object-fit: contain; }
 .hd-home-tile.is-third .hd-home-sponsored-logo { max-width: 110px; max-height: 28px; }
