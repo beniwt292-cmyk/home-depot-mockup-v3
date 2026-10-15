@@ -5099,7 +5099,15 @@ export default function App() {
     const clean = String(url || "").trim();
     if (!clean || typeof window === "undefined") return;
     if (/^https?:\/\//i.test(clean)) window.open(clean, "_blank", "noopener,noreferrer");
-    else navigateToAppPath(clean.startsWith("/") ? clean : `/${clean}`);
+    else {
+      const path = clean.startsWith("/") ? clean : `/${clean}`;
+      navigateToAppPath(path);
+      // Apply the link's filters (e.g. ?category=Roller+Shades) so the grid doesn't reset the URL to unfiltered.
+      if (normalizeAppPath(path) === CATEGORY_GRID_PATH) {
+        showGridPage();
+        applyGridStateFromUrl(path.match(/\?[^#]*/)?.[0] || "");
+      }
+    }
   };
   useEffect(() => {
     if (!selectedProductPage) return;
