@@ -14,6 +14,9 @@ export const DEFAULT_HOME_PAGE_SETTINGS = {
     imageZoom: 1,
     imagePosX: 50,
     imagePosY: 50,
+    tileImageZoom: 1,
+    tileImagePosX: 50,
+    tileImagePosY: 50,
     brand: "BEHR × VENETA",
     logoUrl: "",
     headline: "PAINT MEETS SHADES",
@@ -30,6 +33,9 @@ export const DEFAULT_HOME_PAGE_SETTINGS = {
     imageZoom: 1,
     imagePosX: 50,
     imagePosY: 50,
+    tileImageZoom: 1,
+    tileImagePosX: 50,
+    tileImagePosY: 50,
     brand: "VENETA",
     logoUrl: "/veneta-logo.svg",
     headline: "DARKER ROOMS, BETTER SLEEP",
@@ -134,7 +140,7 @@ function SponsoredTile({ tile, products, imgSrc, onClick, className }) {
         {tile.subhead ? <p>{tile.subhead}</p> : null}
         <button type="button" className="hd-home-text-cta" onClick={(e) => { e.stopPropagation(); onClick(tile.ctaUrl); }}>{tile.ctaText}</button>
       </div>
-      <div className="hd-home-sponsored-image-wrap">{image ? <img src={imgSrc(image)} alt="" /> : <Blinds size={80} strokeWidth={1} />}</div>
+      <div className="hd-home-sponsored-image-wrap">{image ? <img src={imgSrc(image)} alt="" style={bannerImageStyle(tile, "tileImage")} /> : <Blinds size={80} strokeWidth={1} />}</div>
     </section>
   );
 }

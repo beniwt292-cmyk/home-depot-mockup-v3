@@ -3488,11 +3488,11 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
       )}
     </label>
   );
-  const renderImageFraming = (section, aspect) => {
+  const renderImageFraming = (section, aspect, prefix = "image", imageUrl) => {
     const settings = categoryPageEditor[section] || {};
-    const url = String(settings.fullImageUrl || "").trim();
+    const url = String(imageUrl ?? settings.fullImageUrl ?? "").trim();
     if (!url) return null;
-    const { zoom, x, y } = bannerFraming(settings);
+    const { zoom, x, y } = bannerFraming(settings, prefix);
     const set = (field, value) => updateCategoryPageField(section, field, Math.round(value * 100) / 100);
     const startDrag = (event) => {
       event.preventDefault();
@@ -3502,8 +3502,8 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
         // Dragging right reveals more of the left side, like moving the photo itself.
         const dx = ((e.clientX - start.px) / box.width) * 100 / zoom;
         const dy = ((e.clientY - start.py) / box.height) * 100 / zoom;
-        set("imagePosX", Math.min(100, Math.max(0, start.x - dx * 2)));
-        set("imagePosY", Math.min(100, Math.max(0, start.y - dy * 2)));
+        set(`${prefix}PosX`, Math.min(100, Math.max(0, start.x - dx * 2)));
+        set(`${prefix}PosY`, Math.min(100, Math.max(0, start.y - dy * 2)));
       };
       const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
       window.addEventListener("pointermove", move);
@@ -3517,14 +3517,14 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
     );
     return (
       <div className="image-framing category-editor-field-wide">
-        <div className="image-framing-head"><span>Position &amp; zoom</span><button type="button" onClick={() => { set("imageZoom", 1); set("imagePosX", 50); set("imagePosY", 50); }}>Reset</button></div>
-        <div className="image-framing-preview" style={{ aspectRatio: String(aspect) }} onPointerDown={startDrag} onWheel={(e) => set("imageZoom", Math.min(3, Math.max(1, zoom - e.deltaY * 0.002)))} title="Drag to move. Scroll to zoom.">
-          <img src={imgSrc(url)} alt="" draggable={false} style={bannerImageStyle(settings)} />
+        <div className="image-framing-head"><span>Position &amp; zoom</span><button type="button" onClick={() => { set(`${prefix}Zoom`, 1); set(`${prefix}PosX`, 50); set(`${prefix}PosY`, 50); }}>Reset</button></div>
+        <div className="image-framing-preview" style={{ aspectRatio: String(aspect) }} onPointerDown={startDrag} onWheel={(e) => set(`${prefix}Zoom`, Math.min(3, Math.max(1, zoom - e.deltaY * 0.002)))} title="Drag to move. Scroll to zoom.">
+          <img src={imgSrc(url)} alt="" draggable={false} style={bannerImageStyle(settings, prefix)} />
         </div>
         <p className="image-framing-hint">Drag the preview to move the image. Scroll or use the slider to zoom.</p>
-        {slider("imageZoom", "Zoom", zoom, 1, 3, 0.01, (v) => `${Math.round(v * 100)}%`)}
-        {slider("imagePosX", "Left / right", x, 0, 100, 1, (v) => `${Math.round(v)}%`)}
-        {slider("imagePosY", "Up / down", y, 0, 100, 1, (v) => `${Math.round(v)}%`)}
+        {slider(`${prefix}Zoom`, "Zoom", zoom, 1, 3, 0.01, (v) => `${Math.round(v * 100)}%`)}
+        {slider(`${prefix}PosX`, "Left / right", x, 0, 100, 1, (v) => `${Math.round(v)}%`)}
+        {slider(`${prefix}PosY`, "Up / down", y, 0, 100, 1, (v) => `${Math.round(v)}%`)}
       </div>
     );
   };
@@ -3594,6 +3594,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
                     {renderCategoryTextField(section, "ctaUrl", "CTA destination")}
                     {renderCategoryImageField(section, "logoUrl", "Brand logo", "Optional. If empty, the brand name shows as text.")}
                     {renderCategoryImageField(section, "imageUrl", "Tile image", "Optional. If empty, the linked product's main image is used.")}
+                    {renderImageFraming(section, section === "sponsoredMain" ? 1.3 : 0.8, "tileImage", categoryPageEditor[section].imageUrl || (products || []).find((p) => String(p?.model || "").trim() === String(categoryPageEditor[section].productModel || "").trim())?.imageUrl || "")}
                   </div>
                 )}
               </section>
