@@ -855,6 +855,18 @@ function getProductBreadcrumbs(product) {
   return crumbs;
 }
 
+// One consistent breadcrumb trail: every step except the current page is a link.
+function Crumbs({ items }) {
+  return items.map((item, index) => (
+    <React.Fragment key={`${item.label}-${index}`}>
+      {index > 0 && <span>/</span>}
+      {item.onClick && index < items.length - 1
+        ? <button type="button" className="pdp-shot-crumb-button" onClick={item.onClick}>{item.label}</button>
+        : <span className="crumb-current" aria-current={index === items.length - 1 ? "page" : undefined}>{item.label}</span>}
+    </React.Fragment>
+  ));
+}
+
 const HEADER_DEPARTMENT_LINKS = ["Deals", "Halloween", "Appliances", "Building", "Flooring", "Hardware", "Lumber & Composites", "Outdoors", "Paint", "Plumbing", "Tools", "Window Treatments"];
 
 function Header({ searchQuery, setSearchQuery, openEditor, compareCount, onNavigate, activePath = "" }) {
@@ -1492,7 +1504,7 @@ function StockPurchasePanel({ product }) {
 }
 
 
-function ProductDetailPage({ product, onBack, onCustomize, onHome }) {
+function ProductDetailPage({ product, onBack, onCustomize, onHome, onCategoryLanding, onCategoryFilter }) {
   // The side rail has 6 total visible slots. The primary image and the hover
   // image (when Hover in Carousel is enabled and a hover URL exists) consume
   // the first slots before uploaded/gallery images. The 6th slot becomes the
@@ -1602,17 +1614,13 @@ function ProductDetailPage({ product, onBack, onCustomize, onHome }) {
   return (
     <div className="pdp-wrap pdp-screenshot-wrap">
       <nav className="pdp-breadcrumb pdp-shot-breadcrumb" aria-label="Breadcrumb">
-        <button type="button" className="pdp-shot-back-button" onClick={onBack}><ArrowLeft size={14} /> Back to Results</button>
-        {breadcrumbItems.map((crumb, index) => (
-          <React.Fragment key={`${crumb}-${index}`}>
-            <span>/</span>
-            {index === 0 ? (
-              <button type="button" className="pdp-shot-crumb-button" onClick={crumb === "Home" && onHome ? onHome : onBack}>{crumb}</button>
-            ) : (
-              <span>{crumb}</span>
-            )}
-          </React.Fragment>
-        ))}
+        <Crumbs items={[
+          ...breadcrumbItems.map((crumb) => ({
+            label: crumb,
+            onClick: crumb === "Home" ? onHome : crumb === "Window Treatments" ? (onCategoryLanding || onBack) : () => (onCategoryFilter ? onCategoryFilter(crumb) : onBack?.())
+          })),
+          { label: product?.name || product?.title || "Product" }
+        ]} />
       </nav>
 
       <section className={isPreCutProduct ? "pdp-grid pdp-screenshot-grid pdp-stock-grid" : "pdp-grid pdp-screenshot-grid"}>
@@ -1797,7 +1805,7 @@ function ProductDetailPage({ product, onBack, onCustomize, onHome }) {
 }
 
 
-function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchema, onHome }) {
+function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchema, onHome, onCategoryLanding, onCategoryFilter }) {
   const activeConfiguratorSchema = useMemo(() => getRenderableConfiguratorSchema(product, configuratorSchema), [configuratorSchema, product]);
   const [config, setConfig] = useState(() => {
     const defaults = activeConfiguratorSchema.defaults || {};
@@ -1948,11 +1956,13 @@ function ProductConfigurator({ product, onBack, onReturnToPdp, configuratorSchem
   return (
     <div className="hdc-page">
       <nav className="hdc-breadcrumb pdp-shot-breadcrumb" aria-label="Breadcrumb">
-        <button type="button" className="pdp-shot-back-button hdc-back-product-button" onClick={onReturnToPdp}><ArrowLeft size={14} /> Back to Product</button><span>/</span>
-        <button type="button" onClick={onHome || onBack}>Home</button><span>/</span>
-        <button type="button" onClick={onBack}>Window Treatments</button><span>/</span>
-        <button type="button" onClick={onBack}>Window Shades</button><span>/</span>
-        <span>{product.category || "Cellular Shades"}</span>
+        <Crumbs items={[
+          { label: "Home", onClick: onHome || onBack },
+          { label: "Window Treatments", onClick: onCategoryLanding || onBack },
+          ...(product.category ? [{ label: product.category, onClick: onCategoryFilter ? () => onCategoryFilter(product.category) : onBack }] : []),
+          { label: product?.name || product?.title || "Product", onClick: onReturnToPdp },
+          { label: "Customize" }
+        ]} />
       </nav>
 
       <div className="hdc-layout">
@@ -5073,11 +5083,13 @@ export default function App() {
             onBack={returnToCategoryGridPage}
             onReturnToPdp={() => openProductPage(configuratorProduct)}
             onHome={goHome}
+            onCategoryLanding={openCategoryLandingPage}
+            onCategoryFilter={openCategoryGridPageWithFilter}
           />
-        ) : selectedProduct ? <ProductDetailPage product={selectedProduct} onHome={goHome} onBack={returnToCategoryGridPage} onCustomize={() => openConfiguratorPage(selectedProduct)} /> : showCategoryPage ? (
+        ) : selectedProduct ? <ProductDetailPage product={selectedProduct} onHome={goHome} onCategoryLanding={openCategoryLandingPage} onCategoryFilter={openCategoryGridPageWithFilter} onBack={returnToCategoryGridPage} onCustomize={() => openConfiguratorPage(selectedProduct)} /> : showCategoryPage ? (
           <CategoryLandingPage products={products} onHome={goHome} onShopGrid={openCategoryGridPage} onCategoryLink={openCategoryLandingLink} onNavigateCategoryFilter={openCategoryGridPageWithFilter} categoryPageSettings={categoryPageSettings} />
         ) : <>
-          <div className="hd-cat-breadcrumb"><button type="button" className="pdp-shot-back-button hd-cat-page-button" onClick={openCategoryLandingPage}><ArrowLeft size={14} /> Category Page</button><span>/</span><button type="button" onClick={goHome}>Home</button><span>/</span><span>Window Treatments</span></div>
+          <div className="hd-cat-breadcrumb"><Crumbs items={[{ label: "Home", onClick: goHome }, { label: "Window Treatments", onClick: openCategoryLandingPage }, { label: "All Window Treatments" }]} /></div>
           <section className="hd-cat-title-block hd-cat-title-grid">
             <div>
               <h1>WINDOW TREATMENTS</h1>
@@ -14131,6 +14143,7 @@ button { cursor: pointer; }
   padding-top: 0;
 }
 .hd-category-sponsored-image-banner { display: block; width: 100%; height: var(--sponsored-height, 150px); padding: 0; border: 1px solid #d5d5d5; background: #fff; overflow: hidden; cursor: pointer; }
+.hd-cat-breadcrumb .crumb-current, .pdp-shot-breadcrumb .crumb-current, .crumb-current { text-decoration: none !important; cursor: default; font-weight: 400; display: inline-block; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; color: #333; }
 .image-framing { grid-column: 1 / -1; display: grid; gap: 8px; }
 .image-framing-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; }
 .image-framing-head button { border: 1px solid #ccc; background: #fff; border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
