@@ -290,6 +290,7 @@ const PAINT_CSS = `
 .hd-paint-reorder button { padding: 9px 18px; border: 1px solid #f96302; border-radius: 4px; background: #fff; color: #f96302; font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 
 /* Explore colors */
+.hd-category-module.hd-paint-explore { margin-top: 36px; }
 .hd-paint-color-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px 14px; }
 .hd-paint-color-tile { min-width: 0; text-align: center; cursor: pointer; }
 .hd-paint-color-tile .hd-paint-swatch-art { aspect-ratio: 1 / 1; height: auto; border: 1px solid #e1e1e1; overflow: hidden; }
