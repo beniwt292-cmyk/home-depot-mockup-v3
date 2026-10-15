@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import PaintCategoryPage, { DEFAULT_PAINT_PAGE_SETTINGS, mergePaintPageSettings } from "./PaintCategoryPage.jsx";
 import {
   Search, ShoppingCart, User, Menu, Heart, Star, Grid, List, Truck,
   Pencil, Eye, Plus, Trash2, RotateCcw, Store, Home, ChevronRight,
@@ -14,6 +15,7 @@ const FUNCTION_BANNER_PRESETS_URL = `${API_BASE}/.netlify/functions/banner-prese
 const CATEGORY_LANDING_PATH = "/window-treatments";
 const CATEGORY_GRID_PATH = "/window-treatments/products";
 const PRODUCT_ROUTE_PREFIX = "/window-treatments/product";
+const PAINT_PAGE_PATH = "/paint";
 const DEFAULT_GRID_SORT = "top";
 const DEFAULT_ACTIVE_FILTERS = { category: "", brand: "", lift: "", shopType: "", included: "", features: "", event: "" };
 const GRID_FILTER_QUERY_KEYS = {
@@ -136,6 +138,7 @@ function parseAppRoute(path) {
   const clean = normalizeAppPath(path);
   if (clean === "/") return { type: "grid", path: CATEGORY_GRID_PATH, replacePath: CATEGORY_GRID_PATH };
   if (clean === CATEGORY_LANDING_PATH) return { type: "category", path: clean };
+  if (clean === PAINT_PAGE_PATH) return { type: "paint", path: clean };
   if (clean === CATEGORY_GRID_PATH) return { type: "grid", path: clean };
 
   const parts = clean.split("/").filter(Boolean);
@@ -219,7 +222,8 @@ const DEFAULT_MOCKUP_SETTINGS = {
   hoverEnabled: true,
   showReferenceBorders: false,
   placeholderNonBordered: false,
-  categoryPage: DEFAULT_CATEGORY_PAGE_SETTINGS
+  categoryPage: DEFAULT_CATEGORY_PAGE_SETTINGS,
+  paintPage: DEFAULT_PAINT_PAGE_SETTINGS
 };
 
 function mergeMockupSettings(value) {
@@ -228,7 +232,8 @@ function mergeMockupSettings(value) {
     hoverEnabled: typeof source.hoverEnabled === "boolean" ? source.hoverEnabled : DEFAULT_MOCKUP_SETTINGS.hoverEnabled,
     showReferenceBorders: typeof source.showReferenceBorders === "boolean" ? source.showReferenceBorders : DEFAULT_MOCKUP_SETTINGS.showReferenceBorders,
     placeholderNonBordered: typeof source.placeholderNonBordered === "boolean" ? source.placeholderNonBordered : DEFAULT_MOCKUP_SETTINGS.placeholderNonBordered,
-    categoryPage: mergeCategoryPageSettings(source.categoryPage)
+    categoryPage: mergeCategoryPageSettings(source.categoryPage),
+    paintPage: mergePaintPageSettings(source.paintPage)
   };
 }
 
@@ -842,14 +847,16 @@ function getProductBreadcrumbs(product) {
   return crumbs;
 }
 
-function Header({ searchQuery, setSearchQuery, openEditor, compareCount }) {
+const HEADER_DEPARTMENT_LINKS = ["Deals", "Halloween", "Appliances", "Building", "Flooring", "Hardware", "Lumber & Composites", "Outdoors", "Paint", "Plumbing", "Tools"];
+
+function Header({ searchQuery, setSearchQuery, openEditor, compareCount, onNavigate, activePath = "" }) {
   return (
     <header className="hd-header hd-screenshot-header">
       <div className="top-strip">#1 Home Improvement Retailer</div>
       <div className="hd-credit-row" aria-hidden="true" />
       <div className="main-header hd-screenshot-main">
         <div className="hd-logo-wrap">
-          <img src="/logo.svg" alt="The Home Depot" className="custom-logo" />
+          <button type="button" className="hd-logo-home-button" onClick={() => onNavigate?.(CATEGORY_LANDING_PATH)} aria-label="Go to Window Treatments"><img src="/logo.svg" alt="The Home Depot" className="custom-logo" /></button>
         </div>
         <div className="hd-store-strip">
           <span className="hd-store-item"><Store size={15} /> Store <b>10PM</b></span>
@@ -868,6 +875,15 @@ function Header({ searchQuery, setSearchQuery, openEditor, compareCount }) {
           <button type="button" className="hd-editor-main-button" onClick={openEditor}>Mockup Editor</button>
         </div>
       </div>
+      <nav className="hd-department-nav" aria-label="Departments">
+        <button type="button" className="hd-department-link hd-department-menu"><Menu size={16} /> Departments</button>
+        {HEADER_DEPARTMENT_LINKS.map((link) => {
+          const isPaint = link === "Paint";
+          return (
+            <button type="button" key={link} className={`hd-department-link${isPaint ? " is-link" : ""}${isPaint && activePath === PAINT_PAGE_PATH ? " active" : ""}`} onClick={isPaint ? () => onNavigate?.(PAINT_PAGE_PATH) : undefined}>{link}</button>
+          );
+        })}
+      </nav>
     </header>
   );
 }
@@ -2939,7 +2955,10 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
   };
   const isConfiguratorEditor = editorMode === "configurator";
   const isProductEditor = editorMode === "product";
-  const isCategoryEditor = editorMode === "category";
+  const isPaintEditor = editorMode === "paint";
+  const isCategoryEditor = editorMode === "category" || isPaintEditor;
+  const editorPageKey = isPaintEditor ? "paintPage" : "categoryPage";
+  const mergeEditorPageSettings = isPaintEditor ? mergePaintPageSettings : mergeCategoryPageSettings;
   const orderedProducts = Array.isArray(displayProducts) && displayProducts.length ? displayProducts : products;
   const activeConfiguratorProduct = isConfiguratorEditor ? orderedProducts[0] : null;
   const activeConfiguratorSchema = activeConfiguratorProduct ? getProductConfiguratorSchema(activeConfiguratorProduct) : DEFAULT_CONFIGURATOR_SCHEMA;
@@ -3349,6 +3368,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
       sideBanner: { width: 800, height: 900 },
       hero: { width: 1400, height: 900 }
     };
+    if (section === "topBanner" && field === "logoUrl") return resizeImageFileToContainedDataUrl(file, 600, 300, 0.85);
     if (section === "topBanner" && field === "fullImageUrl") return resizeImageFileToContainedDataUrl(file, 2400, 400, 0.82);
     const limits = imageLimits[section] || { width: 1200, height: 700 };
     return resizeImageFileToContainedDataUrl(file, limits.width, limits.height, 0.72);
@@ -3357,13 +3377,13 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
   const updateCategoryPageField = (section, field, value) => {
     if (!setMockupSettings) return;
     setMockupSettings((current) => {
-      const categoryPage = mergeCategoryPageSettings(current?.categoryPage);
+      const pageSettings = mergeEditorPageSettings(current?.[editorPageKey]);
       return mergeMockupSettings({
         ...current,
-        categoryPage: {
-          ...categoryPage,
+        [editorPageKey]: {
+          ...pageSettings,
           [section]: {
-            ...categoryPage[section],
+            ...pageSettings[section],
             [field]: value
           }
         }
@@ -3433,7 +3453,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
     updateProduct(activeConfiguratorProduct.id, "configurator", mergeConfiguratorSchema(DEFAULT_CONFIGURATOR_SCHEMA));
   };
 
-  const categoryPageEditor = mergeCategoryPageSettings(mockupSettings?.categoryPage);
+  const categoryPageEditor = mergeEditorPageSettings(mockupSettings?.[editorPageKey]);
   const renderCategoryTextField = (section, field, label, multiline = false) => (
     <label className="editor-field category-editor-field">
       <span>{label}</span>
@@ -3469,14 +3489,14 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
           <div className="editor-sticky-top">
             <div className="editor-header">
               <div>
-                <div className="editor-kicker"><Pencil size={15} /> Category page panel</div>
-                <h2>Category Page Editor</h2>
-                <p>Edit category page copy and campaign images. Logo assets are served from public files, while banner and hero images save with the category page data.</p>
+                <div className="editor-kicker"><Pencil size={15} /> {isPaintEditor ? "Paint page panel" : "Category page panel"}</div>
+                <h2>{isPaintEditor ? "Paint Page Editor" : "Category Page Editor"}</h2>
+                <p>{isPaintEditor ? "Edit the Paint page top sponsored banner. Fill out the template or upload one image for the whole banner." : "Edit category page copy and campaign images. Logo assets are served from public files, while banner and hero images save with the category page data."}</p>
               </div>
               <button onClick={onClose}><X size={22} /></button>
             </div>
             <div className="editor-actions editor-actions-enhanced">
-              <button onClick={handleEditorSave} className="save-action"><Save size={16} /> Save Category Page</button>
+              <button onClick={handleEditorSave} className="save-action"><Save size={16} /> {isPaintEditor ? "Save Paint Page" : "Save Category Page"}</button>
               <button onClick={reloadProducts} className="secondary-action"><RotateCcw size={16} /> Reload</button>
               {saveStatus && <span className="save-status">{saveStatus}</span>}
             </div>
@@ -3485,7 +3505,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
           <div className="category-editor-workspace">
             <div className="category-editor-controls" aria-label="Category page editable fields">
               <section className="editor-card apple-editor-card editor-card-expanded category-editor-card">
-                <div className="category-editor-section-head"><span>Top sponsored banner</span><strong>VENETA strip</strong></div>
+                <div className="category-editor-section-head"><span>Top sponsored banner</span><strong>{isPaintEditor ? "Paint page strip" : "VENETA strip"}</strong></div>
                 <div className="category-editor-mode-toggle" role="radiogroup" aria-label="Top banner type">
                   {[["template", "Fill out template"], ["image", "Upload full banner image"]].map(([mode, text]) => {
                     const active = (categoryPageEditor.topBanner.mode === "image" ? "image" : "template") === mode;
@@ -3498,6 +3518,18 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
                     {renderCategoryTextField("topBanner", "ctaUrl", "Click destination")}
                   </div>
                 ) : (
+                isPaintEditor ? (
+                <div className="category-editor-grid">
+                  {renderCategoryTextField("topBanner", "label", "Sponsored label")}
+                  {renderCategoryTextField("topBanner", "brand", "Brand name")}
+                  {renderCategoryTextField("topBanner", "headline", "Headline", true)}
+                  {renderCategoryTextField("topBanner", "subhead", "Subheadline")}
+                  {renderCategoryTextField("topBanner", "ctaText", "CTA text")}
+                  {renderCategoryTextField("topBanner", "ctaUrl", "CTA destination")}
+                  {renderCategoryImageField("topBanner", "logoUrl", "Brand logo", "Optional. If empty, the brand name shows as text.")}
+                  {renderCategoryImageField("topBanner", "imageUrl", "Right banner image", "Product or lifestyle image for the right side of the banner.")}
+                </div>
+                ) : (
                 <div className="category-editor-grid">
                   {renderCategoryTextField("topBanner", "label", "Sponsored label")}
                   {renderCategoryTextField("topBanner", "headline", "Headline", true)}
@@ -3509,8 +3541,10 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
                   </label>
                   {renderCategoryImageField("topBanner", "imageUrl", "Right banner image", "Use the room/blinds image cropped for the right side of the banner.")}
                 </div>
-                )}
+                ))}
               </section>
+
+              {!isPaintEditor && <>
 
               <section className="editor-card apple-editor-card editor-card-expanded category-editor-card">
                 <div className="category-editor-section-head"><span>Left sponsored banner</span><strong>Vertical ad</strong></div>
@@ -3625,6 +3659,7 @@ function EditorPanel({ products, displayProducts, editorMode = "grid", setProduc
                   </div>
                 </div>
               </section>
+              </>}
             </div>
           </div>
         </div>
@@ -4839,6 +4874,13 @@ export default function App() {
       return;
     }
 
+    if (route.type === "paint") {
+      setShowCategoryPage(false);
+      setSelectedProductPage(null);
+      setConfiguratorProductPage(null);
+      return;
+    }
+
     if (route.type === "category") {
       setShowCategoryPage(true);
       setSelectedProductPage(null);
@@ -4886,6 +4928,13 @@ export default function App() {
   const selectedProduct = selectedProductPage ? (products.find((p) => String(p.id) === String(selectedProductPage.id)) || selectedProductPage) : null;
   const configuratorProduct = configuratorProductPage ? (products.find((p) => String(p.id) === String(configuratorProductPage.id)) || configuratorProductPage) : null;
   const categoryPageSettings = mergeCategoryPageSettings(mockupSettings.categoryPage);
+  const showPaintPage = parseAppRoute(routePath).type === "paint";
+  const openPaintBannerLink = (url) => {
+    const clean = String(url || "").trim();
+    if (!clean || typeof window === "undefined") return;
+    if (/^https?:\/\//i.test(clean)) window.open(clean, "_blank", "noopener,noreferrer");
+    else navigateToAppPath(clean.startsWith("/") ? clean : `/${clean}`);
+  };
   useEffect(() => {
     if (!selectedProductPage) return;
     const latest = products.find((p) => p.id === selectedProductPage.id);
@@ -4912,9 +4961,11 @@ export default function App() {
   return (
     <div className="hd-root">
       <style>{CSS}</style>
-      <Header searchQuery={searchQuery} setSearchQuery={setSearchQuery} openEditor={() => setEditorOpen(true)} compareCount={compare.size} />
-      <main className={selectedProduct || configuratorProduct ? "page" : showCategoryPage ? "page hd-category-landing-shell" : "page category-screenshot-page"}>
-        {configuratorProduct ? (
+      <Header searchQuery={searchQuery} setSearchQuery={setSearchQuery} openEditor={() => setEditorOpen(true)} compareCount={compare.size} onNavigate={(path) => navigateToAppPath(path)} activePath={normalizeAppPath(routePath)} />
+      <main className={showPaintPage ? "page hd-category-landing-shell hd-paint-page-shell" : selectedProduct || configuratorProduct ? "page" : showCategoryPage ? "page hd-category-landing-shell" : "page category-screenshot-page"}>
+        {showPaintPage ? (
+          <PaintCategoryPage settings={mockupSettings.paintPage} onBannerClick={openPaintBannerLink} imgSrc={imgSrc} />
+        ) : configuratorProduct ? (
           <ProductConfigurator
             product={configuratorProduct}
             configuratorSchema={getProductConfiguratorSchema(configuratorProduct)}
@@ -4981,7 +5032,7 @@ export default function App() {
           </section>
         </>}
       </main>
-      {editorOpen && <EditorPanel products={products} displayProducts={configuratorProduct ? [configuratorProduct] : selectedProduct ? [selectedProduct] : filteredProducts} editorMode={configuratorProduct ? "configurator" : selectedProduct ? "product" : showCategoryPage ? "category" : "grid"} setProducts={setProducts} onClose={() => setEditorOpen(false)} saveProducts={saveProducts} saveStatus={saveStatus} reloadProducts={loadProducts} placeholderNonBordered={placeholderNonBordered} setPlaceholderNonBordered={setPlaceholderNonBordered} mockupSettings={mockupSettings} setMockupSettings={setMockupSettings} bannerPresets={bannerPresets} bannerPresetStatus={bannerPresetStatus} saveBannerPreset={saveBannerPreset} loadBannerPreset={loadBannerPreset} deleteBannerPreset={deleteBannerPreset} renameBannerPreset={renameBannerPreset} reloadBannerPresets={loadBannerPresets} />}
+      {editorOpen && <EditorPanel products={products} displayProducts={configuratorProduct ? [configuratorProduct] : selectedProduct ? [selectedProduct] : filteredProducts} editorMode={showPaintPage ? "paint" : configuratorProduct ? "configurator" : selectedProduct ? "product" : showCategoryPage ? "category" : "grid"} setProducts={setProducts} onClose={() => setEditorOpen(false)} saveProducts={saveProducts} saveStatus={saveStatus} reloadProducts={loadProducts} placeholderNonBordered={placeholderNonBordered} setPlaceholderNonBordered={setPlaceholderNonBordered} mockupSettings={mockupSettings} setMockupSettings={setMockupSettings} bannerPresets={bannerPresets} bannerPresetStatus={bannerPresetStatus} saveBannerPreset={saveBannerPreset} loadBannerPreset={loadBannerPreset} deleteBannerPreset={deleteBannerPreset} renameBannerPreset={renameBannerPreset} reloadBannerPresets={loadBannerPresets} />}
       {quickView && <QuickViewModal product={quickView} onClose={() => setQuickView(null)} onOpenProduct={openProductPage} />}
     </div>
   );
@@ -13979,6 +14030,14 @@ button { cursor: pointer; }
 }
 .hd-category-sponsored-image-banner { display: block; width: 100%; height: var(--sponsored-height, 150px); padding: 0; border: 1px solid #d5d5d5; background: #fff; overflow: hidden; cursor: pointer; }
 .hd-category-sponsored-image-banner img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.hd-logo-home-button { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.hd-department-nav { max-width: 1534px; margin: 0 auto; display: flex; align-items: center; gap: 2px; padding: 0 11px; height: 40px; border-top: 1px solid #e5e5e5; overflow-x: auto; scrollbar-width: none; }
+.hd-department-nav::-webkit-scrollbar { display: none; }
+.hd-department-link { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; height: 100%; padding: 0 12px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: #333; font: inherit; font-size: 14px; cursor: default; white-space: nowrap; }
+.hd-department-menu { font-weight: 700; color: #111; }
+.hd-department-link.active { border-bottom-color: #f96302; color: #111; font-weight: 700; }
+.hd-department-link.is-link { cursor: pointer; }
+.hd-department-link.is-link:hover { text-decoration: underline; }
 .category-editor-mode-toggle { display: flex; gap: 16px; margin: 0; padding: 22px 22px 0; }
 .category-editor-mode-toggle button { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid #ccc; border-radius: 6px; background: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .category-editor-mode-toggle button.active { border-color: #f96302; background: #fff4ec; color: #c44d00; }
